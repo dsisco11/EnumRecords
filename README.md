@@ -14,15 +14,17 @@ A C# source generator that associates compile-time constant data properties with
 
 ## Installation
 
-### NuGet Package (Coming Soon)
+### NuGet Package
 
 ```bash
 dotnet add package EnumRecords
 ```
 
+> **Note:** EnumRecords is a development-only dependency. NuGet automatically configures it with `PrivateAssets="all"` so it won't become a transitive dependency of your consumers.
+
 ### Project Reference
 
-Add a reference to the generator project:
+For local development, add a reference to the generator project:
 
 ```xml
 <ItemGroup>
