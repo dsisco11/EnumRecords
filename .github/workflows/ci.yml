@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main, master]
+    tags:
+      - 'v*'
   pull_request:
     branches: [main, master]
 
@@ -34,3 +36,33 @@ jobs:
 
       - name: Run Tests
         run: dotnet run --project EnumRecords.Tests/EnumRecords.Tests.csproj --configuration Release --no-build
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build EnumRecords.csproj --configuration Release --no-restore
+
+      - name: Pack
+        run: dotnet pack EnumRecords.csproj --configuration Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
+
+      - name: Publish to NuGet
+        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
