@@ -15,6 +15,15 @@ public class EnumRecordGenerator : IIncrementalGenerator
 {
     private const string EnumRecordAttributeName = "EnumRecordAttribute";
     private const string EnumRecordPropertiesAttributeName = "EnumRecordPropertiesAttribute";
+    private const string ReverseLookupAttributeName = "ReverseLookupAttribute";
+
+    private static readonly DiagnosticDescriptor DuplicateReverseLookupValue = new(
+        id: "ENUMREC001",
+        title: "Duplicate reverse-lookup value",
+        messageFormat: "Duplicate value '{0}' for reverse-lookup property '{1}' on enum '{2}'",
+        category: "EnumRecords",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -36,6 +45,12 @@ public class EnumRecordGenerator : IIncrementalGenerator
         // Generate extension methods
         context.RegisterSourceOutput(enumDeclarations, static (ctx, enumInfo) =>
         {
+            // Report diagnostics for duplicate reverse-lookup values
+            foreach (var diagnostic in enumInfo.Diagnostics)
+            {
+                ctx.ReportDiagnostic(diagnostic);
+            }
+
             var source = GenerateExtensionMethods(enumInfo);
             ctx.AddSource($"{enumInfo.EnumName}Extensions.g.cs", SourceText.From(source, Encoding.UTF8));
         });
@@ -109,11 +124,47 @@ public class EnumRecordGenerator : IIncrementalGenerator
             ? null
             : enumSymbol.ContainingNamespace.ToDisplayString();
 
+        // Validate uniqueness for reverse-lookup properties
+        var diagnostics = new List<Diagnostic>();
+        for (int i = 0; i < properties.Count; i++)
+        {
+            var property = properties[i];
+            if (!property.HasReverseLookup)
+                continue;
+
+            var valueToMembers = new Dictionary<string, List<string>>();
+            foreach (var member in members)
+            {
+                var value = member.Values[i];
+                if (!valueToMembers.TryGetValue(value, out var memberList))
+                {
+                    memberList = new List<string>();
+                    valueToMembers[value] = memberList;
+                }
+                memberList.Add(member.Name);
+            }
+
+            foreach (var kvp in valueToMembers)
+            {
+                if (kvp.Value.Count > 1)
+                {
+                    var diagnostic = Diagnostic.Create(
+                        DuplicateReverseLookupValue,
+                        enumDeclaration.Identifier.GetLocation(),
+                        kvp.Key,
+                        property.Name,
+                        enumSymbol.Name);
+                    diagnostics.Add(diagnostic);
+                }
+            }
+        }
+
         return new EnumInfo(
             enumSymbol.Name,
             namespaceName,
             properties,
-            members);
+            members,
+            diagnostics);
     }
 
     private static List<PropertyInfo> GetRecordProperties(ITypeSymbol propertiesType)
@@ -134,9 +185,13 @@ public class EnumRecordGenerator : IIncrementalGenerator
             {
                 foreach (var param in constructor.Parameters)
                 {
+                    var hasReverseLookup = param.GetAttributes()
+                        .Any(a => a.AttributeClass?.Name == ReverseLookupAttributeName);
+
                     properties.Add(new PropertyInfo(
                         param.Name,
-                        GetTypeDisplayName(param.Type)));
+                        GetTypeDisplayName(param.Type),
+                        hasReverseLookup));
                 }
             }
         }
@@ -232,6 +287,44 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine("    };");
         }
 
+        // Generate reverse-lookup methods for properties marked with [ReverseLookup]
+        for (int i = 0; i < enumInfo.Properties.Count; i++)
+        {
+            var property = enumInfo.Properties[i];
+            if (!property.HasReverseLookup)
+                continue;
+
+            // Generate TryFrom method
+            sb.AppendLine();
+            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, out {enumInfo.EnumName} result)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        (result, var success) = value switch");
+            sb.AppendLine("        {");
+
+            foreach (var member in enumInfo.Members)
+            {
+                sb.AppendLine($"            {member.Values[i]} => ({enumInfo.EnumName}.{member.Name}, true),");
+            }
+
+            sb.AppendLine($"            _ => (default({enumInfo.EnumName}), false)");
+            sb.AppendLine("        };");
+            sb.AppendLine("        return success;");
+            sb.AppendLine("    }");
+
+            // Generate From method (throwing variant)
+            sb.AppendLine();
+            sb.AppendLine($"    public static {enumInfo.EnumName} From{property.Name}({property.TypeName} value) => value switch");
+            sb.AppendLine("    {");
+
+            foreach (var member in enumInfo.Members)
+            {
+                sb.AppendLine($"        {member.Values[i]} => {enumInfo.EnumName}.{member.Name},");
+            }
+
+            sb.AppendLine($"        _ => throw new global::System.ArgumentException($\"No {enumInfo.EnumName} found with {property.Name} '{{value}}'\", nameof(value))");
+            sb.AppendLine("    };");
+        }
+
         sb.AppendLine("}");
 
         return sb.ToString();
@@ -267,6 +360,17 @@ public sealed class EnumRecordPropertiesAttribute : global::System.Attribute
         Values = values;
     }
 }
+
+/// <summary>
+/// Marks a property in the record struct as supporting reverse lookup.
+/// When applied, the generator will create TryFrom{PropertyName} and From{PropertyName} methods
+/// that can find the enum value by the property value.
+/// Each enum member must have a unique value for this property.
+/// </summary>
+[global::System.AttributeUsage(global::System.AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
+public sealed class ReverseLookupAttribute : global::System.Attribute
+{
+}
 ";
 
     private sealed class EnumInfo
@@ -275,13 +379,15 @@ public sealed class EnumRecordPropertiesAttribute : global::System.Attribute
         public string? Namespace { get; }
         public List<PropertyInfo> Properties { get; }
         public List<EnumMemberInfo> Members { get; }
+        public List<Diagnostic> Diagnostics { get; }
 
-        public EnumInfo(string enumName, string? ns, List<PropertyInfo> properties, List<EnumMemberInfo> members)
+        public EnumInfo(string enumName, string? ns, List<PropertyInfo> properties, List<EnumMemberInfo> members, List<Diagnostic> diagnostics)
         {
             EnumName = enumName;
             Namespace = ns;
             Properties = properties;
             Members = members;
+            Diagnostics = diagnostics;
         }
     }
 
@@ -289,11 +395,13 @@ public sealed class EnumRecordPropertiesAttribute : global::System.Attribute
     {
         public string Name { get; }
         public string TypeName { get; }
+        public bool HasReverseLookup { get; }
 
-        public PropertyInfo(string name, string typeName)
+        public PropertyInfo(string name, string typeName, bool hasReverseLookup)
         {
             Name = name;
             TypeName = typeName;
+            HasReverseLookup = hasReverseLookup;
         }
     }
 
