@@ -34,6 +34,19 @@ public enum FileType
     Csv,
 }
 
+// Test enum with errors (for diagnostic testing - uncomment to test)
+// public readonly record struct TestErrorProperties(string Name, int Value, string Code);
+// 
+// [EnumRecord<TestErrorProperties>]
+// public enum TestErrorEnum
+// {
+//     [EnumRecordProperties("First", 1)]  // Missing third argument - ENUMREC003
+//     First,
+//     [EnumRecordProperties("Second", 2, "S")]
+//     Second,
+//     Third,  // Missing attribute entirely - ENUMREC002
+// }
+
 public class Program
 {
     public static void Main()

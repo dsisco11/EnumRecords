@@ -25,6 +25,22 @@ public class EnumRecordGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor MissingEnumRecordPropertiesAttribute = new(
+        id: "ENUMREC002",
+        title: "Missing EnumRecordProperties attribute",
+        messageFormat: "Enum member '{0}' is missing [EnumRecordProperties] attribute",
+        category: "EnumRecords",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    private static readonly DiagnosticDescriptor WrongArgumentCount = new(
+        id: "ENUMREC003",
+        title: "Wrong number of arguments in EnumRecordProperties",
+        messageFormat: "[EnumRecordProperties] on '{0}' has {1} argument(s), but the properties type '{2}' expects {3} argument(s)",
+        category: "EnumRecords",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // Register the attribute source code
@@ -45,14 +61,18 @@ public class EnumRecordGenerator : IIncrementalGenerator
         // Generate extension methods
         context.RegisterSourceOutput(enumDeclarations, static (ctx, enumInfo) =>
         {
-            // Report diagnostics for duplicate reverse-lookup values
+            // Report all diagnostics
             foreach (var diagnostic in enumInfo.Diagnostics)
             {
                 ctx.ReportDiagnostic(diagnostic);
             }
 
-            var source = GenerateExtensionMethods(enumInfo);
-            ctx.AddSource($"{enumInfo.EnumName}Extensions.g.cs", SourceText.From(source, Encoding.UTF8));
+            // Only generate extension methods if we have valid members
+            if (enumInfo.Members.Count > 0)
+            {
+                var source = GenerateExtensionMethods(enumInfo);
+                ctx.AddSource($"{enumInfo.EnumName}Extensions.g.cs", SourceText.From(source, Encoding.UTF8));
+            }
         });
     }
 
@@ -79,6 +99,8 @@ public class EnumRecordGenerator : IIncrementalGenerator
 
         // Get enum members with their property values
         var members = new List<EnumMemberInfo>();
+        var diagnostics = new List<Diagnostic>();
+
         foreach (var member in enumSymbol.GetMembers().OfType<IFieldSymbol>())
         {
             if (!member.HasConstantValue)
@@ -94,7 +116,14 @@ public class EnumRecordGenerator : IIncrementalGenerator
                 .FirstOrDefault(a => a.AttributeClass?.Name == EnumRecordPropertiesAttributeName);
 
             if (propsAttribute == null)
+            {
+                // Report missing attribute error
+                diagnostics.Add(Diagnostic.Create(
+                    MissingEnumRecordPropertiesAttribute,
+                    memberSyntax.Identifier.GetLocation(),
+                    member.Name));
                 continue;
+            }
 
             // The params array comes as a single argument containing an array of values
             var values = new List<string>();
@@ -112,12 +141,24 @@ public class EnumRecordGenerator : IIncrementalGenerator
             }
 
             if (values.Count != properties.Count)
+            {
+                // Report wrong argument count error
+                diagnostics.Add(Diagnostic.Create(
+                    WrongArgumentCount,
+                    memberSyntax.Identifier.GetLocation(),
+                    member.Name,
+                    values.Count,
+                    propertiesType.Name,
+                    properties.Count));
                 continue;
+            }
 
             members.Add(new EnumMemberInfo(member.Name, values));
         }
 
-        if (members.Count == 0)
+        // If there are errors but no valid members, we still need to report diagnostics
+        // Return an EnumInfo with empty members but with diagnostics
+        if (members.Count == 0 && diagnostics.Count == 0)
             return null;
 
         var namespaceName = enumSymbol.ContainingNamespace.IsGlobalNamespace
@@ -125,7 +166,6 @@ public class EnumRecordGenerator : IIncrementalGenerator
             : enumSymbol.ContainingNamespace.ToDisplayString();
 
         // Validate uniqueness for reverse-lookup properties
-        var diagnostics = new List<Diagnostic>();
         for (int i = 0; i < properties.Count; i++)
         {
             var property = properties[i];
