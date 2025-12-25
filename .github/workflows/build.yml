@@ -8,14 +8,13 @@ on:
   pull_request:
     branches: [main, master]
 
-jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        dotnet-version: ['8.0.x']
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: 'TinyTokenizer/TinyTokenizer.csproj'
 
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +22,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore dependencies
         run: dotnet restore
@@ -38,31 +37,35 @@ jobs:
         run: dotnet run --project EnumRecords.Tests/EnumRecords.Tests.csproj --configuration Release --no-build
 
   publish:
-    needs: build
+    needs: build-and-test
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-
+    if: github.event_name == 'release'
+    
+    permissions:
+      id-token: write
+      contents: read
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    - name: Extract version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Restore dependencies
-        run: dotnet restore
+    - name: Restore dependencies
+      run: dotnet restore
 
-      - name: Build
-        run: dotnet build EnumRecords.csproj --configuration Release --no-restore
+    - name: Build
+      run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
 
-      - name: Pack
-        run: dotnet pack EnumRecords.csproj --configuration Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
+    - name: Pack
+      run: dotnet pack ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ./nupkg /p:PackageVersion=${{ steps.version.outputs.VERSION }}
 
-      - name: Publish to NuGet
-        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+    - name: Publish to NuGet (Trusted Publishing)
+      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate --api-key dummykey
