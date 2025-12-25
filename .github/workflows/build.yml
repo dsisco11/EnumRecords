@@ -39,7 +39,7 @@ jobs:
     if: github.event_name == 'release'
     
     permissions:
-      id-token: write
+      id-token: write # Required for OIDC token generation
       contents: read
     
     steps:
@@ -63,6 +63,11 @@ jobs:
 
     - name: Pack
       run: dotnet pack --configuration Release --no-build --output ./nupkg /p:PackageVersion=${{ steps.version.outputs.VERSION }}
+
+    - name: NuGet login (OIDC - temp API key)
+      uses: NuGet/login@v1
+      with:
+        user: dsisco11
 
     - name: Publish to NuGet (Trusted Publishing)
       run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate --api-key az
