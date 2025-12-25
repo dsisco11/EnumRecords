@@ -117,5 +117,14 @@ public class Program
         {
             Console.WriteLine($"TryFromMimeType(\"Text/CSV\") = {csv}");
         }
+        Console.WriteLine();
+
+        // GetAll methods examples
+        Console.WriteLine("GetAll methods:");
+        Console.WriteLine($"GetNames() = [{string.Join(", ", EColorsExtensions.GetNames())}]");
+        Console.WriteLine($"GetValues() = [{string.Join(", ", EColorsExtensions.GetValues())}]");
+        Console.WriteLine($"GetHexCodes() = [{string.Join(", ", EColorsExtensions.GetHexCodes())}]");
+        Console.WriteLine($"FileType.GetExtensions() = [{string.Join(", ", FileTypeExtensions.GetExtensions())}]");
+        Console.WriteLine($"FileType.GetMimeTypes() = [{string.Join(", ", FileTypeExtensions.GetMimeTypes())}]");
     }
 }

@@ -12,6 +12,7 @@ A C# source generator that associates compile-time constant data properties with
 - ✅ **Type-safe** — Compile-time validation of property types and values
 - 🎯 **Simple API** — Just two attributes to learn
 - 🔄 **Reverse lookup** — Find enum values by property values with `[ReverseLookup]`
+- 📋 **Collection access** — Get all property values via `Get{PropertyName}s()` methods
 
 ## Installation
 
@@ -206,6 +207,38 @@ FileTypeExtensions.FromMimeType("Application/Json");  // mixed case
 
 > **Note:** When using `IgnoreCase = true`, the uniqueness check also uses case-insensitive comparison. For example, `"ABC"` and `"abc"` would be considered duplicates.
 
+## Get All Property Values
+
+For each property in your record struct, the generator creates a `Get{PropertyName}s()` method that returns all defined values as a read-only list:
+
+### Generated Methods
+
+```csharp
+// For ColorEnumProperties with Name, Value, and HexCode properties:
+public static IReadOnlyList<string> GetNames();
+public static IReadOnlyList<int> GetValues();
+public static IReadOnlyList<string> GetHexCodes();
+```
+
+### Usage
+
+```csharp
+// Get all property values as collections
+var names = EColorsExtensions.GetNames();       // ["Red", "Green", "Blue"]
+var values = EColorsExtensions.GetValues();     // [1, 2, 3]
+var hexCodes = EColorsExtensions.GetHexCodes(); // ["#FF0000", "#00FF00", "#0000FF"]
+
+// Useful for validation, dropdowns, etc.
+if (EColorsExtensions.GetHexCodes().Contains(userInput))
+{
+    // Valid hex code
+}
+
+// Or with FileType enum
+var extensions = FileTypeExtensions.GetExtensions();   // [".json", ".xml", ".csv"]
+var mimeTypes = FileTypeExtensions.GetMimeTypes();     // ["application/json", "application/xml", "text/csv"]
+```
+
 ## Advanced Examples
 
 ### HTTP Status Codes
@@ -309,9 +342,9 @@ public readonly record struct MyProperties([ReverseLookup] string UniqueId);
 
 **Properties:**
 
-| Property     | Type   | Default | Description                                          |
-| ------------ | ------ | ------- | ---------------------------------------------------- |
-| `IgnoreCase` | `bool` | `false` | Enable case-insensitive matching for string lookups  |
+| Property     | Type   | Default | Description                                         |
+| ------------ | ------ | ------- | --------------------------------------------------- |
+| `IgnoreCase` | `bool` | `false` | Enable case-insensitive matching for string lookups |
 
 ## Requirements
 
