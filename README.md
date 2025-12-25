@@ -14,27 +14,10 @@ A C# source generator that associates compile-time constant data properties with
 - 🔄 **Reverse lookup** — Find enum values by property values with `[ReverseLookup]`
 - 📋 **Collection access** — Get all property values via `Get{PropertyName}s()` methods
 
-## Installation
+## Requirements
 
-### NuGet Package
-
-```bash
-dotnet add package EnumRecords
-```
-
-> **Note:** EnumRecords is a development-only dependency. NuGet automatically configures it with `PrivateAssets="all"` so it won't become a transitive dependency of your consumers.
-
-### Project Reference
-
-For local development, add a reference to the generator project:
-
-```xml
-<ItemGroup>
-  <ProjectReference Include="path/to/EnumRecords.csproj"
-                    OutputItemType="Analyzer"
-                    ReferenceOutputAssembly="false" />
-</ItemGroup>
-```
+- .NET 6.0+ or .NET Standard 2.0+ consuming project
+- C# 9.0+ (for record struct support in consuming code)
 
 ## Quick Start
 
@@ -410,32 +393,6 @@ EnumMember = value,
 - Applied to enum members (fields)
 - Member does not require `[EnumData]`
 - Excluded from extension methods, collections, and reverse lookups
-
-## Requirements
-
-- .NET 6.0+ or .NET Standard 2.0+ consuming project
-- C# 9.0+ (for record struct support in consuming code)
-
-## Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/dsisco11/EnumRecords.git
-cd EnumRecords
-
-# Build the generator
-dotnet build EnumRecords.csproj
-
-# Build and run tests
-dotnet run --project EnumRecords.Tests/EnumRecords.Tests.csproj
-```
-
-## How It Works
-
-1. **Post-Initialization**: The generator emits the `EnumRecordAttribute<T>` and `EnumDataAttribute` types as source code into your compilation
-2. **Syntax Analysis**: Finds all enums decorated with `[EnumRecord<T>]`
-3. **Semantic Analysis**: Extracts the properties type `T` and reads constructor parameters to determine property names and types
-4. **Code Generation**: For each decorated enum, generates a static extension class with one method per property using switch expressions
 
 ## License
 
