@@ -14,7 +14,7 @@ namespace EnumRecords;
 public class EnumRecordGenerator : IIncrementalGenerator
 {
     private const string EnumRecordAttributeName = "EnumRecordAttribute";
-    private const string EnumRecordPropertiesAttributeName = "EnumRecordPropertiesAttribute";
+    private const string EnumDataAttributeName = "EnumDataAttribute";
     private const string IgnoreAttributeName = "IgnoreAttribute";
     private const string ReverseLookupAttributeName = "ReverseLookupAttribute";
 
@@ -26,18 +26,18 @@ public class EnumRecordGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor MissingEnumRecordPropertiesAttribute = new(
+    private static readonly DiagnosticDescriptor MissingEnumDataAttribute = new(
         id: "ENUMREC002",
-        title: "Missing EnumRecordProperties attribute",
-        messageFormat: "Enum member '{0}' is missing [EnumRecordProperties] attribute",
+        title: "Missing EnumData attribute",
+        messageFormat: "Enum member '{0}' is missing [EnumData] attribute",
         category: "EnumRecords",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     private static readonly DiagnosticDescriptor WrongArgumentCount = new(
         id: "ENUMREC003",
-        title: "Wrong number of arguments in EnumRecordProperties",
-        messageFormat: "[EnumRecordProperties] on '{0}' has {1} argument(s), but the properties type '{2}' expects {3} argument(s)",
+        title: "Wrong number of arguments in EnumData",
+        messageFormat: "[EnumData] on '{0}' has {1} argument(s), but the properties type '{2}' expects {3} argument(s)",
         category: "EnumRecords",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -124,13 +124,13 @@ public class EnumRecordGenerator : IIncrementalGenerator
             }
 
             var propsAttribute = member.GetAttributes()
-                .FirstOrDefault(a => a.AttributeClass?.Name == EnumRecordPropertiesAttributeName);
+                .FirstOrDefault(a => a.AttributeClass?.Name == EnumDataAttributeName);
 
             if (propsAttribute == null)
             {
                 // Report missing attribute error
                 diagnostics.Add(Diagnostic.Create(
-                    MissingEnumRecordPropertiesAttribute,
+                    MissingEnumDataAttribute,
                     memberSyntax.Identifier.GetLocation(),
                     member.Name));
                 continue;
@@ -498,11 +498,11 @@ public sealed class EnumRecordAttribute<TProperties> : global::System.Attribute
 /// The constructor arguments should match the order of the properties record struct's constructor parameters.
 /// </summary>
 [global::System.AttributeUsage(global::System.AttributeTargets.Field, AllowMultiple = false, Inherited = false)]
-public sealed class EnumRecordPropertiesAttribute : global::System.Attribute
+public sealed class EnumDataAttribute : global::System.Attribute
 {
     public object?[] Values { get; }
 
-    public EnumRecordPropertiesAttribute(params object?[] values)
+    public EnumDataAttribute(params object?[] values)
     {
         Values = values;
     }

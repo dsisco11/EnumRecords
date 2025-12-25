@@ -9,11 +9,11 @@ public readonly record struct ColorEnumProperties(string Name, int Value, [Rever
 [EnumRecord<ColorEnumProperties>]
 public enum EColors : int
 {
-    [EnumRecordProperties("Red", 1, "#FF0000")]
+    [EnumData("Red", 1, "#FF0000")]
     Red = 1,
-    [EnumRecordProperties("Green", 2, "#00FF00")]
+    [EnumData("Green", 2, "#00FF00")]
     Green = 2,
-    [EnumRecordProperties("Blue", 3, "#0000FF")]
+    [EnumData("Blue", 3, "#0000FF")]
     Blue = 3,
 }
 
@@ -28,11 +28,11 @@ public enum FileType
 {
     [Ignore] // Sentinel value - excluded from property mappings
     Unknown = 0,
-    [EnumRecordProperties(".json", "application/json")]
+    [EnumData(".json", "application/json")]
     Json,
-    [EnumRecordProperties(".xml", "application/xml")]
+    [EnumData(".xml", "application/xml")]
     Xml,
-    [EnumRecordProperties(".csv", "text/csv")]
+    [EnumData(".csv", "text/csv")]
     Csv,
 }
 

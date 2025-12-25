@@ -52,7 +52,7 @@ public readonly record struct ColorEnumProperties(
 
 ### 2. Decorate Your Enum
 
-Apply `[EnumRecord<T>]` to your enum and `[EnumRecordProperties(...)]` to each member:
+Apply `[EnumRecord<T>]` to your enum and `[EnumData(...)]` to each member:
 
 ```csharp
 using EnumRecords;
@@ -60,13 +60,13 @@ using EnumRecords;
 [EnumRecord<ColorEnumProperties>]
 public enum EColors : int
 {
-    [EnumRecordProperties("Red", 1, "#FF0000")]
+    [EnumData("Red", 1, "#FF0000")]
     Red = 1,
 
-    [EnumRecordProperties("Green", 2, "#00FF00")]
+    [EnumData("Green", 2, "#00FF00")]
     Green = 2,
 
-    [EnumRecordProperties("Blue", 3, "#0000FF")]
+    [EnumData("Blue", 3, "#0000FF")]
     Blue = 3,
 }
 ```
@@ -94,7 +94,7 @@ foreach (EColors c in Enum.GetValues<EColors>())
 
 ## Supported Property Types
 
-The `[EnumRecordProperties]` attribute accepts any compile-time constant values:
+The `[EnumData]` attribute accepts any compile-time constant values:
 
 | Type                               | Example                   |
 | ---------------------------------- | ------------------------- |
@@ -173,9 +173,9 @@ public readonly record struct BadProps([ReverseLookup] string Code);
 [EnumRecord<BadProps>]
 public enum BadEnum
 {
-    [EnumRecordProperties("A")]
+    [EnumData("A")]
     First,
-    [EnumRecordProperties("A")]  // Error: Duplicate value '"A"' for reverse-lookup property 'Code'
+    [EnumData("A")]  // Error: Duplicate value '"A"' for reverse-lookup property 'Code'
     Second,
 }
 ```
@@ -193,9 +193,9 @@ public readonly record struct FileTypeProperties(
 [EnumRecord<FileTypeProperties>]
 public enum FileType
 {
-    [EnumRecordProperties(".json", "application/json")]
+    [EnumData(".json", "application/json")]
     Json,
-    [EnumRecordProperties(".xml", "application/xml")]
+    [EnumData(".xml", "application/xml")]
     Xml,
 }
 
@@ -222,10 +222,10 @@ public enum FileType
     [Ignore]  // No properties required, excluded from all generated code
     Unknown = 0,
 
-    [EnumRecordProperties(".json", "application/json")]
+    [EnumData(".json", "application/json")]
     Json,
 
-    [EnumRecordProperties(".xml", "application/xml")]
+    [EnumData(".xml", "application/xml")]
     Xml,
 }
 ```
@@ -234,7 +234,7 @@ public enum FileType
 
 Members marked with `[Ignore]`:
 
-- **Do not require** `[EnumRecordProperties]` — no compile error for missing properties
+- **Do not require** `[EnumData]` — no compile error for missing properties
 - **Are excluded from** generated extension methods — calling `.Extension()` on an ignored member throws `ArgumentOutOfRangeException`
 - **Are excluded from** `Get{PropertyName}s()` collections
 - **Are excluded from** reverse lookup methods
@@ -305,19 +305,19 @@ public readonly record struct HttpStatusProperties(
 [EnumRecord<HttpStatusProperties>]
 public enum HttpStatus
 {
-    [EnumRecordProperties(200, "OK", true)]
+    [EnumData(200, "OK", true)]
     Ok = 200,
 
-    [EnumRecordProperties(201, "Created", true)]
+    [EnumData(201, "Created", true)]
     Created = 201,
 
-    [EnumRecordProperties(400, "Bad Request", false)]
+    [EnumData(400, "Bad Request", false)]
     BadRequest = 400,
 
-    [EnumRecordProperties(404, "Not Found", false)]
+    [EnumData(404, "Not Found", false)]
     NotFound = 404,
 
-    [EnumRecordProperties(500, "Internal Server Error", false)]
+    [EnumData(500, "Internal Server Error", false)]
     InternalServerError = 500,
 }
 
@@ -340,13 +340,13 @@ public readonly record struct FileTypeProperties(
 [EnumRecord<FileTypeProperties>]
 public enum FileType
 {
-    [EnumRecordProperties(".json", "application/json", "JSON Document")]
+    [EnumData(".json", "application/json", "JSON Document")]
     Json,
 
-    [EnumRecordProperties(".xml", "application/xml", "XML Document")]
+    [EnumData(".xml", "application/xml", "XML Document")]
     Xml,
 
-    [EnumRecordProperties(".csv", "text/csv", "Comma-Separated Values")]
+    [EnumData(".csv", "text/csv", "Comma-Separated Values")]
     Csv,
 }
 
@@ -368,12 +368,12 @@ public enum MyEnum { ... }
 - `TProperties` must be a `struct` (typically a `readonly record struct`)
 - Applied to the enum declaration
 
-### `EnumRecordPropertiesAttribute`
+### `EnumDataAttribute`
 
 Specifies the property values for an enum member.
 
 ```csharp
-[EnumRecordProperties(arg1, arg2, ...)]
+[EnumData(arg1, arg2, ...)]
 EnumMember = value,
 ```
 
@@ -408,7 +408,7 @@ EnumMember = value,
 ```
 
 - Applied to enum members (fields)
-- Member does not require `[EnumRecordProperties]`
+- Member does not require `[EnumData]`
 - Excluded from extension methods, collections, and reverse lookups
 
 ## Requirements
@@ -432,7 +432,7 @@ dotnet run --project EnumRecords.Tests/EnumRecords.Tests.csproj
 
 ## How It Works
 
-1. **Post-Initialization**: The generator emits the `EnumRecordAttribute<T>` and `EnumRecordPropertiesAttribute` types as source code into your compilation
+1. **Post-Initialization**: The generator emits the `EnumRecordAttribute<T>` and `EnumDataAttribute` types as source code into your compilation
 2. **Syntax Analysis**: Finds all enums decorated with `[EnumRecord<T>]`
 3. **Semantic Analysis**: Extracts the properties type `T` and reads constructor parameters to determine property names and types
 4. **Code Generation**: For each decorated enum, generates a static extension class with one method per property using switch expressions
