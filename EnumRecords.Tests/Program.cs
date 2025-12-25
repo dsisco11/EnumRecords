@@ -26,6 +26,8 @@ public readonly record struct FileTypeProperties(
 [EnumRecord<FileTypeProperties>]
 public enum FileType
 {
+    [Ignore] // Sentinel value - excluded from property mappings
+    Unknown = 0,
     [EnumRecordProperties(".json", "application/json")]
     Json,
     [EnumRecordProperties(".xml", "application/xml")]

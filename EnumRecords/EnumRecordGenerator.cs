@@ -15,6 +15,7 @@ public class EnumRecordGenerator : IIncrementalGenerator
 {
     private const string EnumRecordAttributeName = "EnumRecordAttribute";
     private const string EnumRecordPropertiesAttributeName = "EnumRecordPropertiesAttribute";
+    private const string IgnoreAttributeName = "IgnoreAttribute";
     private const string ReverseLookupAttributeName = "ReverseLookupAttribute";
 
     private static readonly DiagnosticDescriptor DuplicateReverseLookupValue = new(
@@ -111,6 +112,16 @@ public class EnumRecordGenerator : IIncrementalGenerator
 
             if (memberSyntax == null)
                 continue;
+
+            // Check if this member is marked as ignored
+            var ignoredAttribute = member.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name == IgnoreAttributeName);
+
+            if (ignoredAttribute != null)
+            {
+                // Skip ignored members - they don't participate in property mappings
+                continue;
+            }
 
             var propsAttribute = member.GetAttributes()
                 .FirstOrDefault(a => a.AttributeClass?.Name == EnumRecordPropertiesAttributeName);
@@ -511,6 +522,17 @@ public sealed class ReverseLookupAttribute : global::System.Attribute
     /// Only applicable to string properties. Defaults to false (case-sensitive).
     /// </summary>
     public bool IgnoreCase { get; set; } = false;
+}
+
+/// <summary>
+/// Marks an enum member as ignored by the EnumRecord generator.
+/// Members with this attribute do not require [EnumRecordProperties] and will not
+/// participate in property mappings or reverse lookups. Useful for sentinel values
+/// like None, Unknown, or deprecated enum entries.
+/// </summary>
+[global::System.AttributeUsage(global::System.AttributeTargets.Field, AllowMultiple = false, Inherited = false)]
+public sealed class IgnoreAttribute : global::System.Attribute
+{
 }
 ";
 

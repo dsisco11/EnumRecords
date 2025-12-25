@@ -207,6 +207,58 @@ FileTypeExtensions.FromMimeType("Application/Json");  // mixed case
 
 > **Note:** When using `IgnoreCase = true`, the uniqueness check also uses case-insensitive comparison. For example, `"ABC"` and `"abc"` would be considered duplicates.
 
+## Ignoring Enum Members
+
+Use `[Ignore]` to exclude specific enum members from property mappings. This is useful for sentinel values like `None`, `Unknown`, or deprecated entries.
+
+### Setup
+
+```csharp
+using EnumRecords;
+
+[EnumRecord<FileTypeProperties>]
+public enum FileType
+{
+    [Ignore]  // No properties required, excluded from all generated code
+    Unknown = 0,
+
+    [EnumRecordProperties(".json", "application/json")]
+    Json,
+
+    [EnumRecordProperties(".xml", "application/xml")]
+    Xml,
+}
+```
+
+### Behavior
+
+Members marked with `[Ignore]`:
+
+- **Do not require** `[EnumRecordProperties]` — no compile error for missing properties
+- **Are excluded from** generated extension methods — calling `.Extension()` on an ignored member throws `ArgumentOutOfRangeException`
+- **Are excluded from** `Get{PropertyName}s()` collections
+- **Are excluded from** reverse lookup methods
+
+```csharp
+// Ignored members throw when accessing properties
+try
+{
+    var ext = FileType.Unknown.Extension();
+}
+catch (ArgumentOutOfRangeException)
+{
+    // Expected - Unknown is not mapped
+}
+
+// Ignored members are not in collections
+var extensions = FileTypeExtensions.GetExtensions();  // [".json", ".xml"] - no Unknown
+
+// Reverse lookup won't return ignored members
+FileTypeExtensions.TryFromMimeType("unknown", out _);  // false
+```
+
+> **Note:** If you have a conflict with another `[Ignore]` attribute (e.g., from NUnit or MSTest), use the fully qualified name: `[EnumRecords.Ignore]`
+
 ## Get All Property Values
 
 For each property in your record struct, the generator creates a `Get{PropertyName}s()` method that returns all defined values as a read-only list:
@@ -345,6 +397,19 @@ public readonly record struct MyProperties([ReverseLookup] string UniqueId);
 | Property     | Type   | Default | Description                                         |
 | ------------ | ------ | ------- | --------------------------------------------------- |
 | `IgnoreCase` | `bool` | `false` | Enable case-insensitive matching for string lookups |
+
+### `IgnoreAttribute`
+
+Excludes an enum member from property mappings and generated code.
+
+```csharp
+[Ignore]
+EnumMember = value,
+```
+
+- Applied to enum members (fields)
+- Member does not require `[EnumRecordProperties]`
+- Excluded from extension methods, collections, and reverse lookups
 
 ## Requirements
 
