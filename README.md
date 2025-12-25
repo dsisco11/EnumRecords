@@ -11,6 +11,7 @@ A C# source generator that associates compile-time constant data properties with
 - 🔍 **IntelliSense support** — Full IDE autocomplete for generated extension methods
 - ✅ **Type-safe** — Compile-time validation of property types and values
 - 🎯 **Simple API** — Just two attributes to learn
+- 🔄 **Reverse lookup** — Find enum values by property values with `[ReverseLookup]`
 
 ## Installation
 
@@ -103,6 +104,81 @@ The `[EnumRecordProperties]` attribute accepts any compile-time constant values:
 | `bool`                             | `true`, `false`           |
 | `char`                             | `'A'`                     |
 
+## Reverse Lookup
+
+You can mark properties with `[ReverseLookup]` to generate methods that find an enum value by its property value:
+
+### Setup
+
+Add `[ReverseLookup]` to the constructor parameter in your properties record struct:
+
+```csharp
+public readonly record struct ColorEnumProperties(
+    string Name,
+    int Value,
+    [ReverseLookup] string HexCode  // Enable reverse lookup for HexCode
+);
+```
+
+### Generated Methods
+
+For each property marked with `[ReverseLookup]`, two static methods are generated:
+
+```csharp
+// Non-throwing variant - returns false if not found
+public static bool TryFromHexCode(string value, out EColors result);
+
+// Throwing variant - throws ArgumentException if not found
+public static EColors FromHexCode(string value);
+```
+
+### Usage
+
+```csharp
+// Find enum by property value (throwing)
+EColors red = EColorsExtensions.FromHexCode("#FF0000");  // Returns EColors.Red
+
+// Find enum by property value (non-throwing)
+if (EColorsExtensions.TryFromHexCode("#00FF00", out var color))
+{
+    Console.WriteLine(color);  // Green
+}
+
+// Handle not found
+if (!EColorsExtensions.TryFromHexCode("#FFFFFF", out _))
+{
+    Console.WriteLine("Color not found");
+}
+
+// Throwing variant for unknown values
+try
+{
+    var unknown = EColorsExtensions.FromHexCode("#FFFFFF");
+}
+catch (ArgumentException ex)
+{
+    // "No EColors found with HexCode '#FFFFFF'"
+}
+```
+
+### Uniqueness Requirement
+
+Properties marked with `[ReverseLookup]` **must have unique values** across all enum members. The generator emits a compile-time error (`ENUMREC001`) if duplicate values are detected:
+
+```csharp
+// ❌ This will cause compile error ENUMREC001
+public readonly record struct BadProps([ReverseLookup] string Code);
+
+[EnumRecord<BadProps>]
+public enum BadEnum
+{
+    [EnumRecordProperties("A")]
+    First,
+    [EnumRecordProperties("A")]  // Error: Duplicate value '"A"' for reverse-lookup property 'Code'
+    Second,
+}
+```
+
 ## Advanced Examples
 
 ### HTTP Status Codes
@@ -191,6 +267,18 @@ EnumMember = value,
 
 - Arguments are positional and must match the order of the properties record struct's constructor parameters
 - All arguments must be compile-time constants
+
+### `ReverseLookupAttribute`
+
+Marks a property for reverse lookup, enabling lookup of enum values by property value.
+
+```csharp
+public readonly record struct MyProperties([ReverseLookup] string UniqueId);
+```
+
+- Applied to constructor parameters of the properties record struct
+- Property values must be unique across all enum members (enforced at compile time)
+- Generates `TryFrom{PropertyName}` and `From{PropertyName}` static methods
 
 ## Requirements
 
