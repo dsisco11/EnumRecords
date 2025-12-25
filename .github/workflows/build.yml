@@ -70,4 +70,4 @@ jobs:
         user: dsisco11
 
     - name: Publish to NuGet (Trusted Publishing)
-      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate --api-key az
+      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
