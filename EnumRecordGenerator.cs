@@ -132,7 +132,12 @@ public class EnumRecordGenerator : IIncrementalGenerator
             if (!property.HasReverseLookup)
                 continue;
 
-            var valueToMembers = new Dictionary<string, List<string>>();
+            // Use case-insensitive comparison if IgnoreCase is set
+            var comparer = property.IgnoreCase
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
+
+            var valueToMembers = new Dictionary<string, List<string>>(comparer);
             foreach (var member in members)
             {
                 var value = member.Values[i];
@@ -185,13 +190,29 @@ public class EnumRecordGenerator : IIncrementalGenerator
             {
                 foreach (var param in constructor.Parameters)
                 {
-                    var hasReverseLookup = param.GetAttributes()
-                        .Any(a => a.AttributeClass?.Name == ReverseLookupAttributeName);
+                    var reverseLookupAttr = param.GetAttributes()
+                        .FirstOrDefault(a => a.AttributeClass?.Name == ReverseLookupAttributeName);
+
+                    var hasReverseLookup = reverseLookupAttr != null;
+                    var ignoreCase = false;
+
+                    if (hasReverseLookup && param.Type.SpecialType == SpecialType.System_String)
+                    {
+                        // Extract IgnoreCase named argument if present
+                        var ignoreCaseArg = reverseLookupAttr!.NamedArguments
+                            .FirstOrDefault(arg => arg.Key == "IgnoreCase");
+
+                        if (ignoreCaseArg.Key != null && ignoreCaseArg.Value.Value is bool ignoreCaseValue)
+                        {
+                            ignoreCase = ignoreCaseValue;
+                        }
+                    }
 
                     properties.Add(new PropertyInfo(
                         param.Name,
                         GetTypeDisplayName(param.Type),
-                        hasReverseLookup));
+                        hasReverseLookup,
+                        ignoreCase));
                 }
             }
         }
@@ -251,6 +272,20 @@ public class EnumRecordGenerator : IIncrementalGenerator
             .Replace("\t", "\\t");
     }
 
+    /// <summary>
+    /// Converts a string literal like "Hello" to its lowercase version "hello".
+    /// </summary>
+    private static string ToLowerStringLiteral(string literal)
+    {
+        // String literals are in format "value" - we need to lowercase the content
+        if (literal.StartsWith("\"") && literal.EndsWith("\"") && literal.Length >= 2)
+        {
+            var content = literal.Substring(1, literal.Length - 2);
+            return $"\"{content.ToLowerInvariant()}\"";
+        }
+        return literal;
+    }
+
     private static string GenerateExtensionMethods(EnumInfo enumInfo)
     {
         var sb = new StringBuilder();
@@ -298,12 +333,19 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine();
             sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, out {enumInfo.EnumName} result)");
             sb.AppendLine("    {");
-            sb.AppendLine("        (result, var success) = value switch");
+
+            // For case-insensitive string properties, use ToLowerInvariant() on input
+            var switchInput = property.IgnoreCase ? "value?.ToLowerInvariant()" : "value";
+            sb.AppendLine($"        (result, var success) = {switchInput} switch");
             sb.AppendLine("        {");
 
             foreach (var member in enumInfo.Members)
             {
-                sb.AppendLine($"            {member.Values[i]} => ({enumInfo.EnumName}.{member.Name}, true),");
+                // For case-insensitive, output lowercase version of the literal
+                var caseValue = property.IgnoreCase 
+                    ? ToLowerStringLiteral(member.Values[i])
+                    : member.Values[i];
+                sb.AppendLine($"            {caseValue} => ({enumInfo.EnumName}.{member.Name}, true),");
             }
 
             sb.AppendLine($"            _ => (default({enumInfo.EnumName}), false)");
@@ -313,12 +355,19 @@ public class EnumRecordGenerator : IIncrementalGenerator
 
             // Generate From method (throwing variant)
             sb.AppendLine();
-            sb.AppendLine($"    public static {enumInfo.EnumName} From{property.Name}({property.TypeName} value) => value switch");
+
+            // For case-insensitive string properties, use ToLowerInvariant() on input
+            var fromSwitchInput = property.IgnoreCase ? "value?.ToLowerInvariant()" : "value";
+            sb.AppendLine($"    public static {enumInfo.EnumName} From{property.Name}({property.TypeName} value) => {fromSwitchInput} switch");
             sb.AppendLine("    {");
 
             foreach (var member in enumInfo.Members)
             {
-                sb.AppendLine($"        {member.Values[i]} => {enumInfo.EnumName}.{member.Name},");
+                // For case-insensitive, output lowercase version of the literal
+                var caseValue = property.IgnoreCase 
+                    ? ToLowerStringLiteral(member.Values[i])
+                    : member.Values[i];
+                sb.AppendLine($"        {caseValue} => {enumInfo.EnumName}.{member.Name},");
             }
 
             sb.AppendLine($"        _ => throw new global::System.ArgumentException($\"No {enumInfo.EnumName} found with {property.Name} '{{value}}'\", nameof(value))");
@@ -370,6 +419,11 @@ public sealed class EnumRecordPropertiesAttribute : global::System.Attribute
 [global::System.AttributeUsage(global::System.AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
 public sealed class ReverseLookupAttribute : global::System.Attribute
 {
+    /// <summary>
+    /// Gets or sets whether string comparisons should be case-insensitive.
+    /// Only applicable to string properties. Defaults to false (case-sensitive).
+    /// </summary>
+    public bool IgnoreCase { get; set; } = false;
 }
 ";
 
@@ -396,12 +450,14 @@ public sealed class ReverseLookupAttribute : global::System.Attribute
         public string Name { get; }
         public string TypeName { get; }
         public bool HasReverseLookup { get; }
+        public bool IgnoreCase { get; }
 
-        public PropertyInfo(string name, string typeName, bool hasReverseLookup)
+        public PropertyInfo(string name, string typeName, bool hasReverseLookup, bool ignoreCase)
         {
             Name = name;
             TypeName = typeName;
             HasReverseLookup = hasReverseLookup;
+            IgnoreCase = ignoreCase;
         }
     }
 

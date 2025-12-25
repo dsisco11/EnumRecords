@@ -17,6 +17,23 @@ public enum EColors : int
     Blue = 3,
 }
 
+// Example with case-insensitive reverse lookup
+public readonly record struct FileTypeProperties(
+    string Extension,
+    [ReverseLookup(IgnoreCase = true)] string MimeType
+);
+
+[EnumRecord<FileTypeProperties>]
+public enum FileType
+{
+    [EnumRecordProperties(".json", "application/json")]
+    Json,
+    [EnumRecordProperties(".xml", "application/xml")]
+    Xml,
+    [EnumRecordProperties(".csv", "text/csv")]
+    Csv,
+}
+
 public class Program
 {
     public static void Main()
@@ -42,7 +59,7 @@ public class Program
         Console.WriteLine();
 
         // Reverse lookup examples
-        Console.WriteLine("Reverse lookup:");
+        Console.WriteLine("Reverse lookup (case-sensitive):");
         
         // Using From (throwing variant)
         var redFromHex = EColorsExtensions.FromHexCode("#FF0000");
@@ -68,6 +85,24 @@ public class Program
         catch (ArgumentException ex)
         {
             Console.WriteLine($"FromHexCode(\"#FFFFFF\") threw: {ex.Message}");
+        }
+        Console.WriteLine();
+
+        // Case-insensitive reverse lookup examples
+        Console.WriteLine("Reverse lookup (case-insensitive):");
+        
+        // Case matches exactly
+        var json = FileTypeExtensions.FromMimeType("application/json");
+        Console.WriteLine($"FromMimeType(\"application/json\") = {json}");
+
+        // Different case - should still match
+        var xmlUpper = FileTypeExtensions.FromMimeType("APPLICATION/XML");
+        Console.WriteLine($"FromMimeType(\"APPLICATION/XML\") = {xmlUpper}");
+
+        // Mixed case
+        if (FileTypeExtensions.TryFromMimeType("Text/CSV", out var csv))
+        {
+            Console.WriteLine($"TryFromMimeType(\"Text/CSV\") = {csv}");
         }
     }
 }

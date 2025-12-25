@@ -179,6 +179,33 @@ public enum BadEnum
 }
 ```
 
+### Case-Insensitive String Lookup
+
+For string properties, you can enable case-insensitive lookups with `IgnoreCase = true`:
+
+```csharp
+public readonly record struct FileTypeProperties(
+    string Extension,
+    [ReverseLookup(IgnoreCase = true)] string MimeType
+);
+
+[EnumRecord<FileTypeProperties>]
+public enum FileType
+{
+    [EnumRecordProperties(".json", "application/json")]
+    Json,
+    [EnumRecordProperties(".xml", "application/xml")]
+    Xml,
+}
+
+// Usage - all these will match FileType.Json
+FileTypeExtensions.FromMimeType("application/json");  // exact match
+FileTypeExtensions.FromMimeType("APPLICATION/JSON");  // uppercase
+FileTypeExtensions.FromMimeType("Application/Json");  // mixed case
+```
+
+> **Note:** When using `IgnoreCase = true`, the uniqueness check also uses case-insensitive comparison. For example, `"ABC"` and `"abc"` would be considered duplicates.
+
 ## Advanced Examples
 
 ### HTTP Status Codes
@@ -279,6 +306,12 @@ public readonly record struct MyProperties([ReverseLookup] string UniqueId);
 - Applied to constructor parameters of the properties record struct
 - Property values must be unique across all enum members (enforced at compile time)
 - Generates `TryFrom{PropertyName}` and `From{PropertyName}` static methods
+
+**Properties:**
+
+| Property     | Type   | Default | Description                                          |
+| ------------ | ------ | ------- | ---------------------------------------------------- |
+| `IgnoreCase` | `bool` | `false` | Enable case-insensitive matching for string lookups  |
 
 ## Requirements
 
