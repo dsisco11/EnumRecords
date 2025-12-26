@@ -89,7 +89,7 @@ public class BasicGenerationTests
         var recordSource = GeneratorTestHelper.GetGeneratedSource(source, "ItemRecord.g.cs");
 
         Assert.NotNull(recordSource);
-        Assert.Contains("public sealed class ItemRecord", recordSource.SourceText);
+        Assert.Contains("public static class ItemRecord", recordSource.SourceText);
         Assert.Contains("GetLabel", recordSource.SourceText);
     }
 

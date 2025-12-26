@@ -387,9 +387,13 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
+        sb.AppendLine($"/// <summary>");
+        sb.AppendLine($"/// Extension methods for accessing properties of the <see cref=\"{enumInfo.EnumName}\"/> enum.");
+        sb.AppendLine($"/// </summary>");
         sb.AppendLine($"public static class {enumInfo.EnumName}Extensions");
         sb.AppendLine("{");
 
+        // Generate property extension methods that delegate to record class
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
@@ -397,86 +401,45 @@ public class EnumRecordGenerator : IIncrementalGenerator
             if (i > 0)
                 sb.AppendLine();
 
-            sb.AppendLine($"    public static {property.TypeName} {property.Name}(this {enumInfo.EnumName} value) => value switch");
-            sb.AppendLine("    {");
-
-            foreach (var member in enumInfo.Members)
-            {
-                sb.AppendLine($"        {enumInfo.EnumName}.{member.Name} => {member.Values[i]},");
-            }
-
-            sb.AppendLine($"        _ => throw new global::System.ArgumentOutOfRangeException(nameof(value), value, null)");
-            sb.AppendLine("    };");
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Gets the {property.Name} value for this enum value.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static {property.TypeName} {property.Name}(this {enumInfo.EnumName} value) => {enumInfo.EnumName}Record.Get{property.Name}(value);");
         }
 
-        // Generate reverse-lookup methods for properties marked with [ReverseLookup]
+        // Generate reverse-lookup methods that delegate to record class
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
             if (!property.HasReverseLookup)
                 continue;
 
-            // Generate TryFrom method with NotNullWhen attribute for nullability analysis
+            // Generate TryFrom method
             sb.AppendLine();
-            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.EnumName}? result)");
-            sb.AppendLine("    {");
-
-            // For case-insensitive string properties, use ToLowerInvariant() on input
-            var switchInput = property.IgnoreCase ? "value?.ToLowerInvariant()" : "value";
-            sb.AppendLine($"        (result, var success) = {switchInput} switch");
-            sb.AppendLine("        {");
-
-            foreach (var member in enumInfo.Members)
-            {
-                // For case-insensitive, output lowercase version of the literal
-                var caseValue = property.IgnoreCase 
-                    ? ToLowerStringLiteral(member.Values[i])
-                    : member.Values[i];
-                sb.AppendLine($"            {caseValue} => (({enumInfo.EnumName}?){enumInfo.EnumName}.{member.Name}, true),");
-            }
-
-            sb.AppendLine($"            _ => (null, false)");
-            sb.AppendLine("        };");
-            sb.AppendLine("        return success;");
-            sb.AppendLine("    }");
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Attempts to find the enum value with the specified {property.Name}.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.EnumName}? result) => {enumInfo.EnumName}Record.TryFrom{property.Name}(value, out result);");
 
             // Generate From method (throwing variant)
             sb.AppendLine();
-
-            // For case-insensitive string properties, use ToLowerInvariant() on input
-            var fromSwitchInput = property.IgnoreCase ? "value?.ToLowerInvariant()" : "value";
-            sb.AppendLine($"    public static {enumInfo.EnumName} From{property.Name}({property.TypeName} value) => {fromSwitchInput} switch");
-            sb.AppendLine("    {");
-
-            foreach (var member in enumInfo.Members)
-            {
-                // For case-insensitive, output lowercase version of the literal
-                var caseValue = property.IgnoreCase 
-                    ? ToLowerStringLiteral(member.Values[i])
-                    : member.Values[i];
-                sb.AppendLine($"        {caseValue} => {enumInfo.EnumName}.{member.Name},");
-            }
-
-            sb.AppendLine($"        _ => throw new global::System.ArgumentException($\"No {enumInfo.EnumName} found with {property.Name} '{{value}}'\", nameof(value))");
-            sb.AppendLine("    };");
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Finds the enum value with the specified {property.Name}, or throws if not found.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static {enumInfo.EnumName} From{property.Name}({property.TypeName} value) => {enumInfo.EnumName}Record.From{property.Name}(value);");
         }
 
-        // Generate GetAll{PropertyName}s() methods for each property
+        // Generate GetAll{PropertyName}s() methods that delegate to record class
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
             var pluralName = Pluralize(property.Name);
 
             sb.AppendLine();
-            sb.AppendLine($"    public static global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => new {property.TypeName}[]");
-            sb.AppendLine("    {");
-
-            foreach (var member in enumInfo.Members)
-            {
-                sb.AppendLine($"        {member.Values[i]},");
-            }
-
-            sb.AppendLine("    };");
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Gets all {property.Name} values for all enum members.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => {enumInfo.EnumName}Record.Get{pluralName}();");
         }
 
         sb.AppendLine("}");
@@ -501,10 +464,10 @@ public class EnumRecordGenerator : IIncrementalGenerator
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Provides static access to property methods for the <see cref=\"{enumInfo.EnumName}\"/> enum.");
         sb.AppendLine($"/// </summary>");
-        sb.AppendLine($"public sealed class {enumInfo.EnumName}Record");
+        sb.AppendLine($"public static class {enumInfo.EnumName}Record");
         sb.AppendLine("{");
 
-        // Generate Get{PropertyName} instance methods that delegate to extensions
+        // Generate static Get{PropertyName} methods with actual logic
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
@@ -515,10 +478,19 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// Gets the {property.Name} value for the specified enum value.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public {property.TypeName} Get{property.Name}({enumInfo.EnumName} value) => value.{property.Name}();");
+            sb.AppendLine($"    public static {property.TypeName} Get{property.Name}({enumInfo.EnumName} value) => value switch");
+            sb.AppendLine("    {");
+
+            foreach (var member in enumInfo.Members)
+            {
+                sb.AppendLine($"        {enumInfo.EnumName}.{member.Name} => {member.Values[i]},");
+            }
+
+            sb.AppendLine($"        _ => throw new global::System.ArgumentOutOfRangeException(nameof(value), value, null)");
+            sb.AppendLine("    };");
         }
 
-        // Generate GetAll{PropertyName}s() methods
+        // Generate static GetAll{PropertyName}s() methods with actual logic
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
@@ -528,29 +500,73 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// Gets all {property.Name} values for all enum members.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => {enumInfo.EnumName}Extensions.Get{pluralName}();");
+            sb.AppendLine($"    public static global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => new {property.TypeName}[]");
+            sb.AppendLine("    {");
+
+            foreach (var member in enumInfo.Members)
+            {
+                sb.AppendLine($"        {member.Values[i]},");
+            }
+
+            sb.AppendLine("    };");
         }
 
-        // Generate reverse-lookup methods for properties marked with [ReverseLookup]
+        // Generate static reverse-lookup methods for properties marked with [ReverseLookup]
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
             if (!property.HasReverseLookup)
                 continue;
 
-            // Generate TryFrom method with NotNullWhen attribute
+            // Generate TryFrom method with NotNullWhen attribute and actual logic
             sb.AppendLine();
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// Attempts to find the enum value with the specified {property.Name}.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.EnumName}? result) => {enumInfo.EnumName}Extensions.TryFrom{property.Name}(value, out result);");
+            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.EnumName}? result)");
+            sb.AppendLine("    {");
 
-            // Generate From method (throwing variant)
+            // For case-insensitive string properties, use ToLowerInvariant() on input
+            var switchInput = property.IgnoreCase ? "value?.ToLowerInvariant()" : "value";
+            sb.AppendLine($"        (result, var success) = {switchInput} switch");
+            sb.AppendLine("        {");
+
+            foreach (var member in enumInfo.Members)
+            {
+                // For case-insensitive, output lowercase version of the literal
+                var caseValue = property.IgnoreCase 
+                    ? ToLowerStringLiteral(member.Values[i])
+                    : member.Values[i];
+                sb.AppendLine($"            {caseValue} => (({enumInfo.EnumName}?){enumInfo.EnumName}.{member.Name}, true),");
+            }
+
+            sb.AppendLine($"            _ => (null, false)");
+            sb.AppendLine("        };");
+            sb.AppendLine("        return success;");
+            sb.AppendLine("    }");
+
+            // Generate From method (throwing variant) with actual logic
             sb.AppendLine();
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// Finds the enum value with the specified {property.Name}, or throws if not found.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public {enumInfo.EnumName} From{property.Name}({property.TypeName} value) => {enumInfo.EnumName}Extensions.From{property.Name}(value);");
+
+            // For case-insensitive string properties, use ToLowerInvariant() on input
+            var fromSwitchInput = property.IgnoreCase ? "value?.ToLowerInvariant()" : "value";
+            sb.AppendLine($"    public static {enumInfo.EnumName} From{property.Name}({property.TypeName} value) => {fromSwitchInput} switch");
+            sb.AppendLine("    {");
+
+            foreach (var member in enumInfo.Members)
+            {
+                // For case-insensitive, output lowercase version of the literal
+                var caseValue = property.IgnoreCase 
+                    ? ToLowerStringLiteral(member.Values[i])
+                    : member.Values[i];
+                sb.AppendLine($"        {caseValue} => {enumInfo.EnumName}.{member.Name},");
+            }
+
+            sb.AppendLine($"        _ => throw new global::System.ArgumentException($\"No {enumInfo.EnumName} found with {property.Name} '{{value}}'\", nameof(value))");
+            sb.AppendLine("    };");
         }
 
         sb.AppendLine("}");
@@ -573,36 +589,7 @@ public class EnumRecordGenerator : IIncrementalGenerator
         sb.AppendLine("public static class EnumRecord");
         sb.AppendLine("{");
 
-        // Generate the generic Get<TEnum>() method
-        sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    /// Gets the record helper for the specified enum type.");
-        sb.AppendLine("    /// </summary>");
-        sb.AppendLine("    /// <typeparam name=\"TEnum\">The enum type to get the helper for.</typeparam>");
-        sb.AppendLine("    /// <returns>The record helper instance, or throws if the enum is not registered.</returns>");
-        sb.AppendLine("    public static object Get<TEnum>() where TEnum : struct, global::System.Enum");
-        sb.AppendLine("    {");
-        sb.AppendLine("        var type = typeof(TEnum);");
-
-        for (int i = 0; i < enumInfos.Count; i++)
-        {
-            var enumInfo = enumInfos[i];
-            var fullTypeName = enumInfo.Namespace != null
-                ? $"global::{enumInfo.Namespace}.{enumInfo.EnumName}"
-                : $"global::{enumInfo.EnumName}";
-            var fullRecordTypeName = enumInfo.Namespace != null
-                ? $"global::{enumInfo.Namespace}.{enumInfo.EnumName}Record"
-                : $"global::{enumInfo.EnumName}Record";
-
-            var keyword = i == 0 ? "if" : "else if";
-            sb.AppendLine($"        {keyword} (type == typeof({fullTypeName}))");
-            sb.AppendLine($"            return new {fullRecordTypeName}();");
-        }
-
-        sb.AppendLine();
-        sb.AppendLine("        throw new global::System.ArgumentException($\"Enum type {typeof(TEnum).Name} is not registered with EnumRecord.\", nameof(TEnum));");
-        sb.AppendLine("    }");
-
-        // Generate non-generic strongly-typed overloads per enum
+        // Generate strongly-typed static property accessors per enum
         foreach (var enumInfo in enumInfos)
         {
             var fullRecordTypeName = enumInfo.Namespace != null
@@ -611,9 +598,50 @@ public class EnumRecordGenerator : IIncrementalGenerator
 
             sb.AppendLine();
             sb.AppendLine($"    /// <summary>");
-            sb.AppendLine($"    /// Gets the record helper for the <see cref=\"{enumInfo.EnumName}\"/> enum.");
+            sb.AppendLine($"    /// Provides access to the <see cref=\"{enumInfo.EnumName}\"/> record helper.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public static {fullRecordTypeName} {enumInfo.EnumName}() => new {fullRecordTypeName}();");
+            sb.AppendLine($"    public static class {enumInfo.EnumName}");
+            sb.AppendLine("    {");
+
+            // Forward all static methods from the record class
+            foreach (var property in enumInfo.Properties)
+            {
+                sb.AppendLine($"        /// <summary>");
+                sb.AppendLine($"        /// Gets the {property.Name} value for the specified enum value.");
+                sb.AppendLine($"        /// </summary>");
+                sb.AppendLine($"        public static {property.TypeName} Get{property.Name}({enumInfo.Namespace}.{enumInfo.EnumName} value) => {fullRecordTypeName}.Get{property.Name}(value);");
+            }
+
+            foreach (var property in enumInfo.Properties)
+            {
+                var pluralName = Pluralize(property.Name);
+                sb.AppendLine();
+                sb.AppendLine($"        /// <summary>");
+                sb.AppendLine($"        /// Gets all {property.Name} values for all enum members.");
+                sb.AppendLine($"        /// </summary>");
+                sb.AppendLine($"        public static global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => {fullRecordTypeName}.Get{pluralName}();");
+            }
+
+            for (int i = 0; i < enumInfo.Properties.Count; i++)
+            {
+                var property = enumInfo.Properties[i];
+                if (!property.HasReverseLookup)
+                    continue;
+
+                sb.AppendLine();
+                sb.AppendLine($"        /// <summary>");
+                sb.AppendLine($"        /// Attempts to find the enum value with the specified {property.Name}.");
+                sb.AppendLine($"        /// </summary>");
+                sb.AppendLine($"        public static bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.Namespace}.{enumInfo.EnumName}? result) => {fullRecordTypeName}.TryFrom{property.Name}(value, out result);");
+
+                sb.AppendLine();
+                sb.AppendLine($"        /// <summary>");
+                sb.AppendLine($"        /// Finds the enum value with the specified {property.Name}, or throws if not found.");
+                sb.AppendLine($"        /// </summary>");
+                sb.AppendLine($"        public static {enumInfo.Namespace}.{enumInfo.EnumName} From{property.Name}({property.TypeName} value) => {fullRecordTypeName}.From{property.Name}(value);");
+            }
+
+            sb.AppendLine("    }");
         }
 
         sb.AppendLine("}");

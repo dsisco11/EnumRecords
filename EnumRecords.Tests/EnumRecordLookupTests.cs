@@ -92,8 +92,9 @@ public class EnumRecordLookupTests
         var lookupSource = GeneratorTestHelper.GetGeneratedSource(source, "EnumRecord.g.cs");
 
         Assert.NotNull(lookupSource);
-        // Should contain accessor for the Status enum
-        Assert.Contains("Status()", lookupSource.SourceText);
+        // Should contain nested class for the Status enum with forwarding methods
+        Assert.Contains("public static class Status", lookupSource.SourceText);
+        Assert.Contains("GetName", lookupSource.SourceText);
     }
 
     [Fact]

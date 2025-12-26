@@ -274,69 +274,78 @@ var extensions = FileTypeExtensions.GetExtensions();   // [".json", ".xml", ".cs
 var mimeTypes = FileTypeExtensions.GetMimeTypes();     // ["application/json", "application/xml", "text/csv"]
 ```
 
-## Record Helper Classes
+## Static Record Helper Classes
 
-In addition to extension methods, the generator creates two types of helper classes for more object-oriented access patterns.
+In addition to extension methods, the generator creates static helper classes for direct method calls without extension method syntax.
 
 ### Per-Enum Record Class
 
-For each enum with `[EnumRecord<T>]`, a `{EnumName}Record` helper class is generated:
+For each enum with `[EnumRecord<T>]`, a static `{EnumName}Record` class is generated with all the logic:
 
 ```csharp
-// Generated for EColors enum
-public sealed class EColorsRecord
+// Generated for EColors enum - contains actual implementation
+public static class EColorsRecord
 {
-    public string GetName(EColors value) => value.Name();
-    public int GetValue(EColors value) => value.Value();
-    public string GetHexCode(EColors value) => value.HexCode();
+    public static string GetName(EColors value) => value switch { ... };
+    public static int GetValue(EColors value) => value switch { ... };
+    public static string GetHexCode(EColors value) => value switch { ... };
 
-    public IReadOnlyList<string> GetNames() => EColorsExtensions.GetNames();
-    public IReadOnlyList<int> GetValues() => EColorsExtensions.GetValues();
-    public IReadOnlyList<string> GetHexCodes() => EColorsExtensions.GetHexCodes();
+    public static IReadOnlyList<string> GetNames() => new[] { "Red", "Green", "Blue" };
+    public static IReadOnlyList<int> GetValues() => new[] { 1, 2, 3 };
+    public static IReadOnlyList<string> GetHexCodes() => new[] { "#FF0000", "#00FF00", "#0000FF" };
 
     // If [ReverseLookup] is used:
-    public bool TryFromHexCode(string value, out EColors? result) => ...;
-    public EColors FromHexCode(string value) => ...;
+    public static bool TryFromHexCode(string value, [NotNullWhen(true)] out EColors? result) => ...;
+    public static EColors FromHexCode(string value) => ...;
+}
+```
+
+The extension methods in `{EnumName}Extensions` forward to these static methods:
+
+```csharp
+// Extension methods delegate to the record class
+public static class EColorsExtensions
+{
+    public static string Name(this EColors value) => EColorsRecord.GetName(value);
+    public static string HexCode(this EColors value) => EColorsRecord.GetHexCode(value);
+    // ...
 }
 ```
 
 ### Central EnumRecord Lookup
 
-A static `EnumRecord` class provides access to all enum record helpers:
+A static `EnumRecord` class provides a central namespace for all enum helpers via nested classes:
 
 ```csharp
-// Get the helper for a specific enum
-var colorsRecord = new EColorsRecord();
+// Access via nested classes
+string name = EnumRecord.EColors.GetName(EColors.Red);  // "Red"
+var allNames = EnumRecord.EColors.GetNames();           // ["Red", "Green", "Blue"]
 
-// Use it for property access
-string name = colorsRecord.GetName(EColors.Red);  // "Red"
-var allNames = colorsRecord.GetNames();           // ["Red", "Green", "Blue"]
+// Reverse lookups
+if (EnumRecord.EColors.TryFromHexCode("#FF0000", out var color))
+{
+    Console.WriteLine(color);  // Red
+}
 ```
 
 ### Use Cases
 
-Record helper classes are useful when you need to:
+Static record classes are useful when you need to:
 
-- **Pass enum metadata as a dependency** — inject a helper instance rather than using static methods
+- **Avoid extension method syntax** — use explicit static method calls
 - **Work with generic code** — use the helper in scenarios where extension methods are awkward
-- **Test enum-related logic** — mock or substitute the helper for testing
+- **Centralized access** — use `EnumRecord.{EnumName}.Method()` for a unified namespace
 
 ```csharp
-// Dependency injection example
-public class ColorService
-{
-    private readonly EColorsRecord _colorRecord;
+// Direct static access without extension syntax
+string name = EColorsRecord.GetName(EColors.Red);  // "Red"
 
-    public ColorService(EColorsRecord colorRecord)
-    {
-        _colorRecord = colorRecord;
-    }
+// Central namespace access
+var hexCodes = EnumRecord.EColors.GetHexCodes();
 
-    public string GetColorInfo(EColors color)
-    {
-        return $"{_colorRecord.GetName(color)}: {_colorRecord.GetHexCode(color)}";
-    }
-}
+// Useful in LINQ or generic contexts
+var colors = Enum.GetValues<EColors>()
+    .Select(c => new { Color = c, Hex = EColorsRecord.GetHexCode(c) });
 ```
 
 ## Advanced Examples
@@ -463,11 +472,11 @@ EnumMember = value,
 
 For each enum decorated with `[EnumRecord<T>]`, the generator produces:
 
-| Generated Type         | Description                                                        |
-| ---------------------- | ------------------------------------------------------------------ |
-| `{EnumName}Extensions` | Static extension methods for property access                       |
-| `{EnumName}Record`     | Instance helper class with the same methods as the extensions      |
-| `EnumRecord` (once)    | Central static class providing access to all registered enum types |
+| Generated Type         | Description                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `{EnumName}Extensions` | Static extension methods that delegate to `{EnumName}Record`                       |
+| `{EnumName}Record`     | Static class containing the actual implementation logic                            |
+| `EnumRecord` (once)    | Central static class with nested classes for each enum, forwarding to record class |
 
 ### Nullability Attributes
 
