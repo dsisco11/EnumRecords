@@ -74,6 +74,33 @@ public class EdgeCaseTests
     }
 
     [Fact]
+    public void Generator_WithReverseLookup_GeneratesNotNullWhenAttribute()
+    {
+        var source = """
+            using EnumRecords;
+
+            namespace TestNamespace;
+
+            public readonly record struct Props([ReverseLookup] string Code);
+
+            [EnumRecord<Props>]
+            public enum Status
+            {
+                [EnumData("ACT")]
+                Active
+            }
+            """;
+
+        var extensionSource = GeneratorTestHelper.GetGeneratedSource(source, "StatusExtensions.g.cs");
+
+        Assert.NotNull(extensionSource);
+        // TryFrom methods should have NotNullWhen(true) attribute on the out parameter
+        Assert.Contains("NotNullWhen(true)", extensionSource.SourceText);
+        // Out parameter should be nullable
+        Assert.Contains("out Status? result", extensionSource.SourceText);
+    }
+
+    [Fact]
     public void Generator_WithCaseInsensitiveReverseLookup_GeneratesCorrectMethod()
     {
         var source = """

@@ -416,9 +416,9 @@ public class EnumRecordGenerator : IIncrementalGenerator
             if (!property.HasReverseLookup)
                 continue;
 
-            // Generate TryFrom method
+            // Generate TryFrom method with NotNullWhen attribute for nullability analysis
             sb.AppendLine();
-            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, out {enumInfo.EnumName} result)");
+            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.EnumName}? result)");
             sb.AppendLine("    {");
 
             // For case-insensitive string properties, use ToLowerInvariant() on input
@@ -432,10 +432,10 @@ public class EnumRecordGenerator : IIncrementalGenerator
                 var caseValue = property.IgnoreCase 
                     ? ToLowerStringLiteral(member.Values[i])
                     : member.Values[i];
-                sb.AppendLine($"            {caseValue} => ({enumInfo.EnumName}.{member.Name}, true),");
+                sb.AppendLine($"            {caseValue} => (({enumInfo.EnumName}?){enumInfo.EnumName}.{member.Name}, true),");
             }
 
-            sb.AppendLine($"            _ => (default({enumInfo.EnumName}), false)");
+            sb.AppendLine($"            _ => (null, false)");
             sb.AppendLine("        };");
             sb.AppendLine("        return success;");
             sb.AppendLine("    }");
@@ -538,12 +538,12 @@ public class EnumRecordGenerator : IIncrementalGenerator
             if (!property.HasReverseLookup)
                 continue;
 
-            // Generate TryFrom method
+            // Generate TryFrom method with NotNullWhen attribute
             sb.AppendLine();
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// Attempts to find the enum value with the specified {property.Name}.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public bool TryFrom{property.Name}({property.TypeName} value, out {enumInfo.EnumName} result) => {enumInfo.EnumName}Extensions.TryFrom{property.Name}(value, out result);");
+            sb.AppendLine($"    public bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.EnumName}? result) => {enumInfo.EnumName}Extensions.TryFrom{property.Name}(value, out result);");
 
             // Generate From method (throwing variant)
             sb.AppendLine();
