@@ -478,7 +478,7 @@ public class EnumRecordGenerator : IIncrementalGenerator
             var pluralName = Pluralize(property.Name);
             var fieldName = $"_all{pluralName}";
 
-            sb.AppendLine($"    private static readonly global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> {fieldName} = global::System.Collections.Immutable.ImmutableArray.Create(");
+            sb.AppendLine($"    private static readonly global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> {fieldName} = global::System.Collections.Immutable.ImmutableArray.Create<{property.TypeName}>(");
 
             for (int j = 0; j < enumInfo.Members.Count; j++)
             {
