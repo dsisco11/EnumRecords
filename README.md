@@ -274,6 +274,71 @@ var extensions = FileTypeExtensions.GetExtensions();   // [".json", ".xml", ".cs
 var mimeTypes = FileTypeExtensions.GetMimeTypes();     // ["application/json", "application/xml", "text/csv"]
 ```
 
+## Record Helper Classes
+
+In addition to extension methods, the generator creates two types of helper classes for more object-oriented access patterns.
+
+### Per-Enum Record Class
+
+For each enum with `[EnumRecord<T>]`, a `{EnumName}Record` helper class is generated:
+
+```csharp
+// Generated for EColors enum
+public sealed class EColorsRecord
+{
+    public string GetName(EColors value) => value.Name();
+    public int GetValue(EColors value) => value.Value();
+    public string GetHexCode(EColors value) => value.HexCode();
+
+    public IReadOnlyList<string> GetNames() => EColorsExtensions.GetNames();
+    public IReadOnlyList<int> GetValues() => EColorsExtensions.GetValues();
+    public IReadOnlyList<string> GetHexCodes() => EColorsExtensions.GetHexCodes();
+
+    // If [ReverseLookup] is used:
+    public bool TryFromHexCode(string value, out EColors? result) => ...;
+    public EColors FromHexCode(string value) => ...;
+}
+```
+
+### Central EnumRecord Lookup
+
+A static `EnumRecord` class provides access to all enum record helpers:
+
+```csharp
+// Get the helper for a specific enum
+var colorsRecord = new EColorsRecord();
+
+// Use it for property access
+string name = colorsRecord.GetName(EColors.Red);  // "Red"
+var allNames = colorsRecord.GetNames();           // ["Red", "Green", "Blue"]
+```
+
+### Use Cases
+
+Record helper classes are useful when you need to:
+
+- **Pass enum metadata as a dependency** — inject a helper instance rather than using static methods
+- **Work with generic code** — use the helper in scenarios where extension methods are awkward
+- **Test enum-related logic** — mock or substitute the helper for testing
+
+```csharp
+// Dependency injection example
+public class ColorService
+{
+    private readonly EColorsRecord _colorRecord;
+
+    public ColorService(EColorsRecord colorRecord)
+    {
+        _colorRecord = colorRecord;
+    }
+
+    public string GetColorInfo(EColors color)
+    {
+        return $"{_colorRecord.GetName(color)}: {_colorRecord.GetHexCode(color)}";
+    }
+}
+```
+
 ## Advanced Examples
 
 ### HTTP Status Codes
@@ -393,6 +458,29 @@ EnumMember = value,
 - Applied to enum members (fields)
 - Member does not require `[EnumData]`
 - Excluded from extension methods, collections, and reverse lookups
+
+### Generated Classes
+
+For each enum decorated with `[EnumRecord<T>]`, the generator produces:
+
+| Generated Type         | Description                                                        |
+| ---------------------- | ------------------------------------------------------------------ |
+| `{EnumName}Extensions` | Static extension methods for property access                       |
+| `{EnumName}Record`     | Instance helper class with the same methods as the extensions      |
+| `EnumRecord` (once)    | Central static class providing access to all registered enum types |
+
+### Nullability Attributes
+
+Generated `TryFrom*` methods include proper nullability annotations:
+
+```csharp
+public static bool TryFromHexCode(
+    string value,
+    [NotNullWhen(true)] out EColors? result);
+```
+
+- `[NotNullWhen(true)]` indicates that `result` is non-null when the method returns `true`
+- The out parameter is nullable (`EColors?`) and returns `null` on lookup failure
 
 ## License
 
