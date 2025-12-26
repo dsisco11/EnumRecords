@@ -226,6 +226,40 @@ public class Program
         }
         
         Console.WriteLine();
+
+        // EnumRecord lookup API tests
+        Console.WriteLine("EnumRecord Lookup API:");
+        Console.WriteLine("======================");
+        
+        // Strongly-typed non-generic access
+        var colorsRecord = EnumRecord.EColors();
+        Console.WriteLine($"EnumRecord.EColors().GetHexCode(EColors.Red) = {colorsRecord.GetHexCode(EColors.Red)}");
+        Console.WriteLine($"EnumRecord.EColors().GetHexCodes() = [{string.Join(", ", colorsRecord.GetHexCodes())}]");
+        Console.WriteLine($"EnumRecord.EColors().GetNames() = [{string.Join(", ", colorsRecord.GetNames())}]");
+        
+        // Reverse lookup via record helper
+        if (colorsRecord.TryFromHexCode("#00FF00", out var greenResult))
+        {
+            Console.WriteLine($"EnumRecord.EColors().TryFromHexCode(\"#00FF00\") = {greenResult}");
+        }
+        Console.WriteLine($"EnumRecord.EColors().FromHexCode(\"#0000FF\") = {colorsRecord.FromHexCode("#0000FF")}");
+        Console.WriteLine();
+
+        // Generic access (returns object, needs cast)
+        var colorsRecordGeneric = (EColorsRecord)EnumRecord.Get<EColors>();
+        Console.WriteLine($"((EColorsRecord)EnumRecord.Get<EColors>()).GetHexCodes() = [{string.Join(", ", colorsRecordGeneric.GetHexCodes())}]");
+        
+        // FileType via generic
+        var fileTypeRecord = (FileTypeRecord)EnumRecord.Get<FileType>();
+        Console.WriteLine($"((FileTypeRecord)EnumRecord.Get<FileType>()).GetMimeTypes() = [{string.Join(", ", fileTypeRecord.GetMimeTypes())}]");
+        Console.WriteLine();
+
+        // Strongly-typed FileType access
+        var ftRecord = EnumRecord.FileType();
+        Console.WriteLine($"EnumRecord.FileType().GetExtension(FileType.Json) = {ftRecord.GetExtension(FileType.Json)}");
+        Console.WriteLine($"EnumRecord.FileType().FromMimeType(\"TEXT/CSV\") = {ftRecord.FromMimeType("TEXT/CSV")}");
+        Console.WriteLine();
+
         Console.WriteLine("All escape tests passed!");
     }
 }
