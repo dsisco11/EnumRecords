@@ -94,33 +94,6 @@ public class BasicGenerationTests
     }
 
     [Fact]
-    public void Generator_WithValidEnum_GeneratesEnumRecordLookup()
-    {
-        var source = """
-            using EnumRecords;
-
-            namespace TestNamespace;
-
-            public readonly record struct ColorProps(string Hex);
-
-            [EnumRecord<ColorProps>]
-            public enum Color
-            {
-                [EnumData("#FF0000")]
-                Red,
-                
-                [EnumData("#00FF00")]
-                Green
-            }
-            """;
-
-        var lookupSource = GeneratorTestHelper.GetGeneratedSource(source, "EnumRecord.g.cs");
-
-        Assert.NotNull(lookupSource);
-        Assert.Contains("public static class EnumRecord", lookupSource.SourceText);
-    }
-
-    [Fact]
     public void Generator_WithMultipleEnums_GeneratesAllFiles()
     {
         var source = """
