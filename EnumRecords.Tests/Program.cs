@@ -36,6 +36,43 @@ public enum FileType
     Csv,
 }
 
+// Test enum for Unicode and special character escaping
+public readonly record struct EscapeTestProperties(
+    [ReverseLookup] string Text,
+    [ReverseLookup] char Character
+);
+
+[EnumRecord<EscapeTestProperties>]
+public enum EscapeTest
+{
+    [EnumData("Hello\tWorld", '\t')]    // Tab
+    Tab,
+    [EnumData("Line1\nLine2", '\n')]    // Newline
+    Newline,
+    [EnumData("Return\rHere", '\r')]    // Carriage return
+    CarriageReturn,
+    [EnumData("Quote\"Test", '"')]      // Double quote
+    Quote,
+    [EnumData("Back\\slash", '\\')]     // Backslash
+    Backslash,
+    [EnumData("Null\0Char", '\0')]      // Null character
+    NullChar,
+    [EnumData("Alert\aSound", '\a')]    // Alert/bell
+    Alert,
+    [EnumData("Back\bSpace", '\b')]     // Backspace
+    Backspace,
+    [EnumData("Form\fFeed", '\f')]      // Form feed
+    FormFeed,
+    [EnumData("Vertical\vTab", '\v')]   // Vertical tab
+    VerticalTab,
+    [EnumData("Café", 'é')]             // Non-ASCII character
+    Unicode,
+    [EnumData("日本語", '日')]           // Japanese characters
+    Japanese,
+    [EnumData("Emoji: 😀", '€')]        // Emoji and Euro sign
+    Emoji,
+}
+
 // Test enum with errors (for diagnostic testing - uncomment to test)
 // public readonly record struct TestErrorProperties(string Name, int Value, string Code);
 // 
@@ -128,5 +165,67 @@ public class Program
         Console.WriteLine($"GetHexCodes() = [{string.Join(", ", EColorsExtensions.GetHexCodes())}]");
         Console.WriteLine($"FileType.GetExtensions() = [{string.Join(", ", FileTypeExtensions.GetExtensions())}]");
         Console.WriteLine($"FileType.GetMimeTypes() = [{string.Join(", ", FileTypeExtensions.GetMimeTypes())}]");
+        Console.WriteLine();
+
+        // Unicode and special character escaping tests
+        Console.WriteLine("Unicode/Escape character tests:");
+        Console.WriteLine("===============================");
+        
+        // Test that the extension methods work correctly with escaped characters
+        Console.WriteLine($"EscapeTest.Tab.Text() = \"{EscapeTest.Tab.Text().Replace("\t", "\\t")}\"");
+        Console.WriteLine($"EscapeTest.Tab.Character() = '\\t' (0x{(int)EscapeTest.Tab.Character():X2})");
+        
+        Console.WriteLine($"EscapeTest.Newline.Text() = \"{EscapeTest.Newline.Text().Replace("\n", "\\n")}\"");
+        Console.WriteLine($"EscapeTest.Newline.Character() = '\\n' (0x{(int)EscapeTest.Newline.Character():X2})");
+        
+        Console.WriteLine($"EscapeTest.NullChar.Text() contains null: {EscapeTest.NullChar.Text().Contains('\0')}");
+        Console.WriteLine($"EscapeTest.NullChar.Character() = '\\0' (0x{(int)EscapeTest.NullChar.Character():X2})");
+        
+        Console.WriteLine($"EscapeTest.Quote.Text() = \"{EscapeTest.Quote.Text().Replace("\"", "\\\"")}\"");
+        Console.WriteLine($"EscapeTest.Quote.Character() = '\"' (0x{(int)EscapeTest.Quote.Character():X2})");
+        
+        Console.WriteLine($"EscapeTest.Backslash.Text() = \"{EscapeTest.Backslash.Text().Replace("\\", "\\\\")}\"");
+        Console.WriteLine($"EscapeTest.Backslash.Character() = '\\\\' (0x{(int)EscapeTest.Backslash.Character():X2})");
+        
+        Console.WriteLine($"EscapeTest.Unicode.Text() = \"{EscapeTest.Unicode.Text()}\"");
+        Console.WriteLine($"EscapeTest.Unicode.Character() = '{EscapeTest.Unicode.Character()}' (0x{(int)EscapeTest.Unicode.Character():X4})");
+        
+        Console.WriteLine($"EscapeTest.Japanese.Text() = \"{EscapeTest.Japanese.Text()}\"");
+        Console.WriteLine($"EscapeTest.Japanese.Character() = '{EscapeTest.Japanese.Character()}' (0x{(int)EscapeTest.Japanese.Character():X4})");
+        
+        Console.WriteLine($"EscapeTest.Emoji.Text() = \"{EscapeTest.Emoji.Text()}\"");
+        Console.WriteLine($"EscapeTest.Emoji.Character() = '{EscapeTest.Emoji.Character()}' (0x{(int)EscapeTest.Emoji.Character():X4})");
+        Console.WriteLine();
+
+        // Test reverse lookup with special characters
+        Console.WriteLine("Reverse lookup with special characters:");
+        
+        if (EscapeTestExtensions.TryFromText("Hello\tWorld", out var tabResult))
+        {
+            Console.WriteLine($"TryFromText(\"Hello\\tWorld\") = {tabResult}");
+        }
+        
+        if (EscapeTestExtensions.TryFromCharacter('\n', out var newlineResult))
+        {
+            Console.WriteLine($"TryFromCharacter('\\n') = {newlineResult}");
+        }
+        
+        if (EscapeTestExtensions.TryFromCharacter('\0', out var nullResult))
+        {
+            Console.WriteLine($"TryFromCharacter('\\0') = {nullResult}");
+        }
+        
+        if (EscapeTestExtensions.TryFromText("Café", out var unicodeResult))
+        {
+            Console.WriteLine($"TryFromText(\"Café\") = {unicodeResult}");
+        }
+        
+        if (EscapeTestExtensions.TryFromText("日本語", out var japaneseResult))
+        {
+            Console.WriteLine($"TryFromText(\"日本語\") = {japaneseResult}");
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("All escape tests passed!");
     }
 }

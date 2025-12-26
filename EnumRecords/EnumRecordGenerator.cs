@@ -301,7 +301,7 @@ public class EnumRecordGenerator : IIncrementalGenerator
         return constant.Type?.SpecialType switch
         {
             SpecialType.System_String => $"\"{EscapeString(constant.Value?.ToString() ?? "")}\"",
-            SpecialType.System_Char => $"'{constant.Value}'",
+            SpecialType.System_Char => $"'{EscapeChar((char)(constant.Value ?? '\0'))}'",
             SpecialType.System_Boolean => constant.Value?.ToString()?.ToLowerInvariant() ?? "false",
             SpecialType.System_Single => $"{constant.Value}f",
             SpecialType.System_Double => $"{constant.Value}d",
@@ -315,12 +315,32 @@ public class EnumRecordGenerator : IIncrementalGenerator
 
     private static string EscapeString(string value)
     {
-        return value
-            .Replace("\\", "\\\\")
-            .Replace("\"", "\\\"")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t");
+        var sb = new StringBuilder(value.Length);
+        foreach (char c in value)
+        {
+            sb.Append(EscapeChar(c));
+        }
+        return sb.ToString();
+    }
+
+    private static string EscapeChar(char c)
+    {
+        return c switch
+        {
+            '\\' => "\\\\",
+            '\"' => "\\\"",
+            '\'' => "\\'",
+            '\0' => "\\0",
+            '\a' => "\\a",
+            '\b' => "\\b",
+            '\f' => "\\f",
+            '\n' => "\\n",
+            '\r' => "\\r",
+            '\t' => "\\t",
+            '\v' => "\\v",
+            _ when c < ' ' || c > '~' => $"\\u{(int)c:X4}",
+            _ => c.ToString()
+        };
     }
 
     /// <summary>
