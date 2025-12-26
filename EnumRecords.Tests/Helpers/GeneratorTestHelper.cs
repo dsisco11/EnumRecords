@@ -25,6 +25,7 @@ public static class GeneratorTestHelper
             MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
             MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location),
             MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location),
+            MetadataReference.CreateFromFile(typeof(ImmutableArray<>).Assembly.Location),
         };
 
         var compilation = CSharpCompilation.Create(

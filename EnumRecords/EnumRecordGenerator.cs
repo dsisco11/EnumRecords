@@ -439,7 +439,7 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// Gets all {property.Name} values for all enum members.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public static global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => {enumInfo.EnumName}Record.Get{pluralName}();");
+            sb.AppendLine($"    public static global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> Get{pluralName}() => {enumInfo.EnumName}Record.Get{pluralName}();");
         }
 
         sb.AppendLine("}");
@@ -467,6 +467,28 @@ public class EnumRecordGenerator : IIncrementalGenerator
         sb.AppendLine($"public static class {enumInfo.EnumName}Record");
         sb.AppendLine("{");
 
+        // Generate static backing fields for GetAll methods (ImmutableArray for zero-allocation access)
+        for (int i = 0; i < enumInfo.Properties.Count; i++)
+        {
+            var property = enumInfo.Properties[i];
+            var pluralName = Pluralize(property.Name);
+            var fieldName = $"_all{pluralName}";
+
+            sb.AppendLine($"    private static readonly global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> {fieldName} = global::System.Collections.Immutable.ImmutableArray.Create(");
+
+            for (int j = 0; j < enumInfo.Members.Count; j++)
+            {
+                var member = enumInfo.Members[j];
+                var comma = j < enumInfo.Members.Count - 1 ? "," : "";
+                sb.AppendLine($"        {member.Values[i]}{comma}");
+            }
+
+            sb.AppendLine("    );");
+        }
+
+        if (enumInfo.Properties.Count > 0)
+            sb.AppendLine();
+
         // Generate static Get{PropertyName} methods with actual logic
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
@@ -490,25 +512,18 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine("    };");
         }
 
-        // Generate static GetAll{PropertyName}s() methods with actual logic
+        // Generate static GetAll{PropertyName}s() methods returning pre-allocated ImmutableArray
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
             var pluralName = Pluralize(property.Name);
+            var fieldName = $"_all{pluralName}";
 
             sb.AppendLine();
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// Gets all {property.Name} values for all enum members.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public static global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => new {property.TypeName}[]");
-            sb.AppendLine("    {");
-
-            foreach (var member in enumInfo.Members)
-            {
-                sb.AppendLine($"        {member.Values[i]},");
-            }
-
-            sb.AppendLine("    };");
+            sb.AppendLine($"    public static global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> Get{pluralName}() => {fieldName};");
         }
 
         // Generate static reverse-lookup methods for properties marked with [ReverseLookup]
@@ -619,7 +634,7 @@ public class EnumRecordGenerator : IIncrementalGenerator
                 sb.AppendLine($"        /// <summary>");
                 sb.AppendLine($"        /// Gets all {property.Name} values for all enum members.");
                 sb.AppendLine($"        /// </summary>");
-                sb.AppendLine($"        public static global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => {fullRecordTypeName}.Get{pluralName}();");
+                sb.AppendLine($"        public static global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> Get{pluralName}() => {fullRecordTypeName}.Get{pluralName}();");
             }
 
             for (int i = 0; i < enumInfo.Properties.Count; i++)
