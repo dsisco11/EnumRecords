@@ -10,6 +10,89 @@ namespace EnumRecords.Tests;
 public class EdgeCaseTests
 {
     [Fact]
+    public void Generator_WithSmallIntegerTypes_GeneratesCorrectCasts()
+    {
+        var source = """
+            using EnumRecords;
+
+            namespace TestNamespace;
+
+            public readonly record struct Props(byte Level, sbyte Offset, short Priority, ushort Count);
+
+            [EnumRecord<Props>]
+            public enum Status
+            {
+                [EnumData((byte)1, (sbyte)-5, (short)100, (ushort)1000)]
+                Active,
+                
+                [EnumData((byte)2, (sbyte)10, (short)200, (ushort)2000)]
+                Inactive
+            }
+            """;
+
+        var result = GeneratorTestHelper.RunGenerator(source);
+
+        // Should compile without errors
+        var errors = result.OutputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+
+        Assert.Empty(errors);
+
+        // Verify the generated code exists
+        var extensionSource = result.GeneratedSources
+            .FirstOrDefault(s => s.HintName == "StatusExtensions.g.cs");
+        
+        Assert.NotNull(extensionSource);
+    }
+
+    [Fact]
+    public void Generator_WithByteProperty_GeneratesCorrectReturnType()
+    {
+        var source = """
+            using EnumRecords;
+
+            namespace TestNamespace;
+
+            public readonly record struct ColorProps(byte R, byte G, byte B);
+
+            [EnumRecord<ColorProps>]
+            public enum Color
+            {
+                [EnumData((byte)255, (byte)0, (byte)0)]
+                Red,
+                
+                [EnumData((byte)0, (byte)255, (byte)0)]
+                Green,
+                
+                [EnumData((byte)0, (byte)0, (byte)255)]
+                Blue
+            }
+            """;
+
+        var result = GeneratorTestHelper.RunGenerator(source);
+
+        // Should compile without errors
+        var errors = result.OutputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+
+        Assert.Empty(errors);
+
+        var extensionSource = result.GeneratedSources
+            .FirstOrDefault(s => s.HintName == "ColorExtensions.g.cs");
+        
+        Assert.NotNull(extensionSource);
+        var generatedCode = extensionSource.SourceText.ToString();
+
+        // Verify the generated methods have correct return types (ImmutableArray<byte>, not ImmutableArray<int>)
+        // Method names are pluralized (R -> Rs, G -> Gs, B -> Bs)
+        Assert.Contains("ImmutableArray<byte> GetRs()", generatedCode);
+        Assert.Contains("ImmutableArray<byte> GetGs()", generatedCode);
+        Assert.Contains("ImmutableArray<byte> GetBs()", generatedCode);
+    }
+
+    [Fact]
     public void Generator_WithIgnoreAttribute_ExcludesMember()
     {
         var source = """

@@ -324,7 +324,11 @@ public class EnumRecordGenerator : IIncrementalGenerator
             SpecialType.System_Decimal => $"{constant.Value}m",
             SpecialType.System_Int64 => $"{constant.Value}L",
             SpecialType.System_UInt64 => $"{constant.Value}UL",
-            SpecialType.System_UInt32 => $"{constant.Value}U",
+            SpecialType.System_UInt32 => $"{constant.Value}U",            
+            SpecialType.System_Byte => $"(byte){constant.Value}",
+            SpecialType.System_SByte => $"(sbyte){constant.Value}",
+            SpecialType.System_Int16 => $"(short){constant.Value}",
+            SpecialType.System_UInt16 => $"(ushort){constant.Value}",            
             _ => constant.Value?.ToString() ?? "default"
         };
     }
