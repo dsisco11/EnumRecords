@@ -59,7 +59,7 @@ public class EnumRecordGenerator : IIncrementalGenerator
             .Where(static info => info is not null)
             .Select(static (info, _) => info!);
 
-        // Generate extension methods
+        // Generate extension methods and record classes per enum
         context.RegisterSourceOutput(enumDeclarations, static (ctx, enumInfo) =>
         {
             // Report all diagnostics
@@ -71,8 +71,24 @@ public class EnumRecordGenerator : IIncrementalGenerator
             // Only generate extension methods if we have valid members
             if (enumInfo.Members.Count > 0)
             {
-                var source = GenerateExtensionMethods(enumInfo);
-                ctx.AddSource($"{enumInfo.EnumName}Extensions.g.cs", SourceText.From(source, Encoding.UTF8));
+                var extensionsSource = GenerateExtensionMethods(enumInfo);
+                ctx.AddSource($"{enumInfo.EnumName}Extensions.g.cs", SourceText.From(extensionsSource, Encoding.UTF8));
+
+                var recordSource = GenerateRecordClass(enumInfo);
+                ctx.AddSource($"{enumInfo.EnumName}Record.g.cs", SourceText.From(recordSource, Encoding.UTF8));
+            }
+        });
+
+        // Collect all enum infos to generate the central EnumRecord lookup class
+        var collectedEnums = enumDeclarations.Collect();
+
+        context.RegisterSourceOutput(collectedEnums, static (ctx, enumInfos) =>
+        {
+            var validEnums = enumInfos.Where(e => e.Members.Count > 0).ToList();
+            if (validEnums.Count > 0)
+            {
+                var source = GenerateEnumRecordLookup(validEnums);
+                ctx.AddSource("EnumRecord.g.cs", SourceText.From(source, Encoding.UTF8));
             }
         });
     }
@@ -371,9 +387,13 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
+        sb.AppendLine($"/// <summary>");
+        sb.AppendLine($"/// Extension methods for accessing properties of the <see cref=\"{enumInfo.EnumName}\"/> enum.");
+        sb.AppendLine($"/// </summary>");
         sb.AppendLine($"public static class {enumInfo.EnumName}Extensions");
         sb.AppendLine("{");
 
+        // Generate property extension methods that delegate to record class
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
@@ -381,7 +401,106 @@ public class EnumRecordGenerator : IIncrementalGenerator
             if (i > 0)
                 sb.AppendLine();
 
-            sb.AppendLine($"    public static {property.TypeName} {property.Name}(this {enumInfo.EnumName} value) => value switch");
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Gets the {property.Name} value for this enum value.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static {property.TypeName} {property.Name}(this {enumInfo.EnumName} value) => {enumInfo.EnumName}Record.Get{property.Name}(value);");
+        }
+
+        // Generate reverse-lookup methods that delegate to record class
+        for (int i = 0; i < enumInfo.Properties.Count; i++)
+        {
+            var property = enumInfo.Properties[i];
+            if (!property.HasReverseLookup)
+                continue;
+
+            // Generate TryFrom method
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Attempts to find the enum value with the specified {property.Name}.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.EnumName}? result) => {enumInfo.EnumName}Record.TryFrom{property.Name}(value, out result);");
+
+            // Generate From method (throwing variant)
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Finds the enum value with the specified {property.Name}, or throws if not found.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static {enumInfo.EnumName} From{property.Name}({property.TypeName} value) => {enumInfo.EnumName}Record.From{property.Name}(value);");
+        }
+
+        // Generate GetAll{PropertyName}s() methods that delegate to record class
+        for (int i = 0; i < enumInfo.Properties.Count; i++)
+        {
+            var property = enumInfo.Properties[i];
+            var pluralName = Pluralize(property.Name);
+
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Gets all {property.Name} values for all enum members.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> Get{pluralName}() => {enumInfo.EnumName}Record.Get{pluralName}();");
+        }
+
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    private static string GenerateRecordClass(EnumInfo enumInfo)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("// <auto-generated />");
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+
+        if (enumInfo.Namespace != null)
+        {
+            sb.AppendLine($"namespace {enumInfo.Namespace};");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"/// <summary>");
+        sb.AppendLine($"/// Provides static access to property methods for the <see cref=\"{enumInfo.EnumName}\"/> enum.");
+        sb.AppendLine($"/// </summary>");
+        sb.AppendLine($"public static class {enumInfo.EnumName}Record");
+        sb.AppendLine("{");
+
+        // Generate static backing fields for GetAll methods (ImmutableArray for zero-allocation access)
+        for (int i = 0; i < enumInfo.Properties.Count; i++)
+        {
+            var property = enumInfo.Properties[i];
+            var pluralName = Pluralize(property.Name);
+            var fieldName = $"_all{pluralName}";
+
+            sb.AppendLine($"    private static readonly global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> {fieldName} = global::System.Collections.Immutable.ImmutableArray.Create(");
+
+            for (int j = 0; j < enumInfo.Members.Count; j++)
+            {
+                var member = enumInfo.Members[j];
+                var comma = j < enumInfo.Members.Count - 1 ? "," : "";
+                sb.AppendLine($"        {member.Values[i]}{comma}");
+            }
+
+            sb.AppendLine("    );");
+        }
+
+        if (enumInfo.Properties.Count > 0)
+            sb.AppendLine();
+
+        // Generate static Get{PropertyName} methods with actual logic
+        for (int i = 0; i < enumInfo.Properties.Count; i++)
+        {
+            var property = enumInfo.Properties[i];
+
+            if (i > 0)
+                sb.AppendLine();
+
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Gets the {property.Name} value for the specified enum value.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static {property.TypeName} Get{property.Name}({enumInfo.EnumName} value) => value switch");
             sb.AppendLine("    {");
 
             foreach (var member in enumInfo.Members)
@@ -393,16 +512,33 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine("    };");
         }
 
-        // Generate reverse-lookup methods for properties marked with [ReverseLookup]
+        // Generate static GetAll{PropertyName}s() methods returning pre-allocated ImmutableArray
+        for (int i = 0; i < enumInfo.Properties.Count; i++)
+        {
+            var property = enumInfo.Properties[i];
+            var pluralName = Pluralize(property.Name);
+            var fieldName = $"_all{pluralName}";
+
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Gets all {property.Name} values for all enum members.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> Get{pluralName}() => {fieldName};");
+        }
+
+        // Generate static reverse-lookup methods for properties marked with [ReverseLookup]
         for (int i = 0; i < enumInfo.Properties.Count; i++)
         {
             var property = enumInfo.Properties[i];
             if (!property.HasReverseLookup)
                 continue;
 
-            // Generate TryFrom method
+            // Generate TryFrom method with NotNullWhen attribute and actual logic
             sb.AppendLine();
-            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, out {enumInfo.EnumName} result)");
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Attempts to find the enum value with the specified {property.Name}.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.EnumName}? result)");
             sb.AppendLine("    {");
 
             // For case-insensitive string properties, use ToLowerInvariant() on input
@@ -416,16 +552,19 @@ public class EnumRecordGenerator : IIncrementalGenerator
                 var caseValue = property.IgnoreCase 
                     ? ToLowerStringLiteral(member.Values[i])
                     : member.Values[i];
-                sb.AppendLine($"            {caseValue} => ({enumInfo.EnumName}.{member.Name}, true),");
+                sb.AppendLine($"            {caseValue} => (({enumInfo.EnumName}?){enumInfo.EnumName}.{member.Name}, true),");
             }
 
-            sb.AppendLine($"            _ => (default({enumInfo.EnumName}), false)");
+            sb.AppendLine($"            _ => (null, false)");
             sb.AppendLine("        };");
             sb.AppendLine("        return success;");
             sb.AppendLine("    }");
 
-            // Generate From method (throwing variant)
+            // Generate From method (throwing variant) with actual logic
             sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Finds the enum value with the specified {property.Name}, or throws if not found.");
+            sb.AppendLine($"    /// </summary>");
 
             // For case-insensitive string properties, use ToLowerInvariant() on input
             var fromSwitchInput = property.IgnoreCase ? "value?.ToLowerInvariant()" : "value";
@@ -445,22 +584,79 @@ public class EnumRecordGenerator : IIncrementalGenerator
             sb.AppendLine("    };");
         }
 
-        // Generate GetAll{PropertyName}s() methods for each property
-        for (int i = 0; i < enumInfo.Properties.Count; i++)
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    private static string GenerateEnumRecordLookup(List<EnumInfo> enumInfos)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("// <auto-generated />");
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        sb.AppendLine("namespace EnumRecords;");
+        sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Provides lookup access to enum record helpers.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("public static class EnumRecord");
+        sb.AppendLine("{");
+
+        // Generate strongly-typed static property accessors per enum
+        foreach (var enumInfo in enumInfos)
         {
-            var property = enumInfo.Properties[i];
-            var pluralName = Pluralize(property.Name);
+            var fullRecordTypeName = enumInfo.Namespace != null
+                ? $"global::{enumInfo.Namespace}.{enumInfo.EnumName}Record"
+                : $"global::{enumInfo.EnumName}Record";
 
             sb.AppendLine();
-            sb.AppendLine($"    public static global::System.Collections.Generic.IReadOnlyList<{property.TypeName}> Get{pluralName}() => new {property.TypeName}[]");
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Provides access to the <see cref=\"{enumInfo.EnumName}\"/> record helper.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public static class {enumInfo.EnumName}");
             sb.AppendLine("    {");
 
-            foreach (var member in enumInfo.Members)
+            // Forward all static methods from the record class
+            foreach (var property in enumInfo.Properties)
             {
-                sb.AppendLine($"        {member.Values[i]},");
+                sb.AppendLine($"        /// <summary>");
+                sb.AppendLine($"        /// Gets the {property.Name} value for the specified enum value.");
+                sb.AppendLine($"        /// </summary>");
+                sb.AppendLine($"        public static {property.TypeName} Get{property.Name}({enumInfo.Namespace}.{enumInfo.EnumName} value) => {fullRecordTypeName}.Get{property.Name}(value);");
             }
 
-            sb.AppendLine("    };");
+            foreach (var property in enumInfo.Properties)
+            {
+                var pluralName = Pluralize(property.Name);
+                sb.AppendLine();
+                sb.AppendLine($"        /// <summary>");
+                sb.AppendLine($"        /// Gets all {property.Name} values for all enum members.");
+                sb.AppendLine($"        /// </summary>");
+                sb.AppendLine($"        public static global::System.Collections.Immutable.ImmutableArray<{property.TypeName}> Get{pluralName}() => {fullRecordTypeName}.Get{pluralName}();");
+            }
+
+            for (int i = 0; i < enumInfo.Properties.Count; i++)
+            {
+                var property = enumInfo.Properties[i];
+                if (!property.HasReverseLookup)
+                    continue;
+
+                sb.AppendLine();
+                sb.AppendLine($"        /// <summary>");
+                sb.AppendLine($"        /// Attempts to find the enum value with the specified {property.Name}.");
+                sb.AppendLine($"        /// </summary>");
+                sb.AppendLine($"        public static bool TryFrom{property.Name}({property.TypeName} value, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out {enumInfo.Namespace}.{enumInfo.EnumName}? result) => {fullRecordTypeName}.TryFrom{property.Name}(value, out result);");
+
+                sb.AppendLine();
+                sb.AppendLine($"        /// <summary>");
+                sb.AppendLine($"        /// Finds the enum value with the specified {property.Name}, or throws if not found.");
+                sb.AppendLine($"        /// </summary>");
+                sb.AppendLine($"        public static {enumInfo.Namespace}.{enumInfo.EnumName} From{property.Name}({property.TypeName} value) => {fullRecordTypeName}.From{property.Name}(value);");
+            }
+
+            sb.AppendLine("    }");
         }
 
         sb.AppendLine("}");

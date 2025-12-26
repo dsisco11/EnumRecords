@@ -274,6 +274,80 @@ var extensions = FileTypeExtensions.GetExtensions();   // [".json", ".xml", ".cs
 var mimeTypes = FileTypeExtensions.GetMimeTypes();     // ["application/json", "application/xml", "text/csv"]
 ```
 
+## Static Record Helper Classes
+
+In addition to extension methods, the generator creates static helper classes for direct method calls without extension method syntax.
+
+### Per-Enum Record Class
+
+For each enum with `[EnumRecord<T>]`, a static `{EnumName}Record` class is generated with all the logic:
+
+```csharp
+// Generated for EColors enum - contains actual implementation
+public static class EColorsRecord
+{
+    public static string GetName(EColors value) => value switch { ... };
+    public static int GetValue(EColors value) => value switch { ... };
+    public static string GetHexCode(EColors value) => value switch { ... };
+
+    public static IReadOnlyList<string> GetNames() => new[] { "Red", "Green", "Blue" };
+    public static IReadOnlyList<int> GetValues() => new[] { 1, 2, 3 };
+    public static IReadOnlyList<string> GetHexCodes() => new[] { "#FF0000", "#00FF00", "#0000FF" };
+
+    // If [ReverseLookup] is used:
+    public static bool TryFromHexCode(string value, [NotNullWhen(true)] out EColors? result) => ...;
+    public static EColors FromHexCode(string value) => ...;
+}
+```
+
+The extension methods in `{EnumName}Extensions` forward to these static methods:
+
+```csharp
+// Extension methods delegate to the record class
+public static class EColorsExtensions
+{
+    public static string Name(this EColors value) => EColorsRecord.GetName(value);
+    public static string HexCode(this EColors value) => EColorsRecord.GetHexCode(value);
+    // ...
+}
+```
+
+### Central EnumRecord Lookup
+
+A static `EnumRecord` class provides a central namespace for all enum helpers via nested classes:
+
+```csharp
+// Access via nested classes
+string name = EnumRecord.EColors.GetName(EColors.Red);  // "Red"
+var allNames = EnumRecord.EColors.GetNames();           // ["Red", "Green", "Blue"]
+
+// Reverse lookups
+if (EnumRecord.EColors.TryFromHexCode("#FF0000", out var color))
+{
+    Console.WriteLine(color);  // Red
+}
+```
+
+### Use Cases
+
+Static record classes are useful when you need to:
+
+- **Avoid extension method syntax** — use explicit static method calls
+- **Work with generic code** — use the helper in scenarios where extension methods are awkward
+- **Centralized access** — use `EnumRecord.{EnumName}.Method()` for a unified namespace
+
+```csharp
+// Direct static access without extension syntax
+string name = EColorsRecord.GetName(EColors.Red);  // "Red"
+
+// Central namespace access
+var hexCodes = EnumRecord.EColors.GetHexCodes();
+
+// Useful in LINQ or generic contexts
+var colors = Enum.GetValues<EColors>()
+    .Select(c => new { Color = c, Hex = EColorsRecord.GetHexCode(c) });
+```
+
 ## Advanced Examples
 
 ### HTTP Status Codes
@@ -393,6 +467,29 @@ EnumMember = value,
 - Applied to enum members (fields)
 - Member does not require `[EnumData]`
 - Excluded from extension methods, collections, and reverse lookups
+
+### Generated Classes
+
+For each enum decorated with `[EnumRecord<T>]`, the generator produces:
+
+| Generated Type         | Description                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `{EnumName}Extensions` | Static extension methods that delegate to `{EnumName}Record`                       |
+| `{EnumName}Record`     | Static class containing the actual implementation logic                            |
+| `EnumRecord` (once)    | Central static class with nested classes for each enum, forwarding to record class |
+
+### Nullability Attributes
+
+Generated `TryFrom*` methods include proper nullability annotations:
+
+```csharp
+public static bool TryFromHexCode(
+    string value,
+    [NotNullWhen(true)] out EColors? result);
+```
+
+- `[NotNullWhen(true)]` indicates that `result` is non-null when the method returns `true`
+- The out parameter is nullable (`EColors?`) and returns `null` on lookup failure
 
 ## License
 
